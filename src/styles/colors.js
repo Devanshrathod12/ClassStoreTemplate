@@ -8,7 +8,7 @@ export default {
     backgroundFaded: '#f9f9f9',
     backgroundSuccess: '#e9f7ec',
     backgroundDanger: '#FFEBEE',
-    backgroundPrimaryLight: '#E7F2FF',
+    backgroundPrimaryLight: '#e7f2ff5d',
     overlay: 'rgba(0,0,0,0.5)',
     textPrimary: '#212529',
     textSecondary: '#495057',
