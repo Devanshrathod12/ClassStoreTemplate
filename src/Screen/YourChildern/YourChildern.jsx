@@ -8,7 +8,9 @@ import {
     ScrollView,
     TouchableOpacity
 } from 'react-native';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { logout } from '../../Redux/auth/authSlice';
+import { resetChildren } from '../../Redux/childSlice/childSlice';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
@@ -18,6 +20,7 @@ import { scale, fontScale, verticalScale, moderateScale } from '../../styles/sty
 import NavigationString from '../../Navigation/NavigationString';
 
 const YourChildrenScreen = ({ navigation }) => {
+    const dispatch = useDispatch();
     const { user } = useSelector((state) => state.auth);
     const { children } = useSelector((state) => state.child);
     const mobileNumber = user?.mobileNumber || '';
@@ -25,6 +28,11 @@ const YourChildrenScreen = ({ navigation }) => {
     const getInitials = (name) => {
         if (!name) return '';
         return name.charAt(0).toUpperCase();
+    };
+
+    const handleLogout = () => {
+        dispatch(resetChildren());
+        dispatch(logout());
     };
 
     const hasChildrenToShow = children.some(c => c.name || c.age || c.standard);
@@ -101,25 +109,54 @@ const YourChildrenScreen = ({ navigation }) => {
                         <Text style={styles.statLabel}>Progress</Text>
                     </View>
                 </View>
+                
+                {/* Updated Explore Section */}
                 <View style={styles.section}>
                     <View style={styles.exploreCard}>
-                        <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>Explore ClassStore</Text>
-                        </View>
-                        <TouchableOpacity style={[styles.exploreItem, styles.exploreItemSelected]}>
-                            <MaterialIcons name="search" size={scale(18)} color={Colors.textLight} />
-                            <Text style={styles.exploreItemTextSelected}>School-Specific Books</Text>
+                        <Text style={styles.exploreTitle}>Explore ClassStore</Text>
+                        <TouchableOpacity style={[styles.exploreButton, styles.orderNowButton]}>
+                            <MaterialCommunityIcons name="cart-arrow-down" size={scale(18)} color={Colors.textLight} />
+                            <Text style={styles.exploreButtonText}>Order Now</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.exploreButton, styles.schoolBooksButton]}>
+                            <MaterialCommunityIcons name="book-search-outline" size={scale(18)} color={Colors.textLight} />
+                            <Text style={styles.exploreButtonText}>School-Specific Books</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.exploreItem}>
+                            <MaterialCommunityIcons name="cart-outline" size={scale(20)} color={Colors.textSecondary} />
+                            <Text style={styles.exploreItemText}>My Cart</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.exploreItem}>
-                            <MaterialCommunityIcons name="receipt-text-outline" size={scale(18)} color={Colors.textSecondary} />
+                            <MaterialCommunityIcons name="receipt-text-outline" size={scale(20)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>My Orders</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={[styles.exploreItem, { borderBottomWidth: 0 }]}>
-                            <MaterialCommunityIcons name="star-outline" size={scale(20)} color={Colors.textSecondary} />
+                        <TouchableOpacity style={styles.exploreItem}>
+                            <MaterialCommunityIcons name="star-outline" size={scale(22)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>Wishlist</Text>
+                        </TouchableOpacity>
+                         <TouchableOpacity style={styles.exploreItem} onPress={() => navigation.navigate(NavigationString.AddChild)}>
+                            <MaterialCommunityIcons name="account-plus-outline" size={scale(20)} color={Colors.textSecondary} />
+                            <Text style={styles.exploreItemText}>Add Another Child</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.exploreItem}>
+                            <MaterialCommunityIcons name="school-outline" size={scale(20)} color={Colors.textSecondary} />
+                            <Text style={styles.exploreItemText}>School Resources</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.exploreItem, {borderBottomWidth: 0}]}>
+                            <MaterialCommunityIcons name="cog-outline" size={scale(20)} color={Colors.textSecondary} />
+                            <Text style={styles.exploreItemText}>Account Settings</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
+
+                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                    <MaterialCommunityIcons name="logout" size={scale(18)} color={Colors.textLight} />
+                    <Text style={styles.logoutButtonText}>Logout</Text>
+                </TouchableOpacity>
+
+                <Text style={styles.footerText}>Made with ❤️ for learners everywhere</Text>
+
             </ScrollView>
         </SafeAreaView>
     );
@@ -305,17 +342,38 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 2,
     },
+    exploreTitle: {
+        fontSize: fontScale(16),
+        fontWeight: 'bold',
+        color: Colors.textPrimary,
+        marginBottom: verticalScale(12),
+    },
+    exploreButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: verticalScale(12),
+        borderRadius: moderateScale(8),
+        marginBottom: verticalScale(8),
+    },
+    orderNowButton: {
+        backgroundColor: '#F44336', // Red
+    },
+    schoolBooksButton: {
+        backgroundColor: '#2196F3', // Blue
+    },
+    exploreButtonText: {
+        color: Colors.textLight,
+        fontSize: fontScale(14),
+        fontWeight: 'bold',
+        marginLeft: scale(8),
+    },
     exploreItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: verticalScale(12),
-        paddingHorizontal: scale(8),
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.borderLight,
-    },
-    exploreItemSelected: {
-        backgroundColor: Colors.primary,
-        borderRadius: moderateScale(8),
+        paddingVertical: verticalScale(14),
+        borderTopWidth: 1,
+        borderTopColor: Colors.borderLight,
     },
     exploreItemText: {
         fontSize: fontScale(14),
@@ -323,11 +381,27 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         marginLeft: scale(12),
     },
-    exploreItemTextSelected: {
-        fontSize: fontScale(14),
+    logoutButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.danger,
+        borderRadius: moderateScale(8),
+        paddingVertical: verticalScale(12),
+        width: '100%',
+        marginTop: verticalScale(20),
+    },
+    logoutButtonText: {
         color: Colors.textLight,
+        fontSize: fontScale(16),
         fontWeight: 'bold',
-        marginLeft: scale(12),
+        marginLeft: scale(8),
+    },
+    footerText: {
+        fontSize: fontScale(12),
+        color: Colors.textMuted,
+        marginTop: verticalScale(15),
+        textAlign: 'center',
     },
 });
 

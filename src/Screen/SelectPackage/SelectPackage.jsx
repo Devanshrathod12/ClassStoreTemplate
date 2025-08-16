@@ -13,6 +13,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import Colors from '../../styles/colors';
 import { scale, fontScale, verticalScale, moderateScale } from '../../styles/stylesconfig';
+import NavigationString from '../../Navigation/NavigationString';
 
 const packagesData = [
     { id: 1, title: 'Early Foundation Pack', popular: true, price: 899, originalPrice: 1199, description: 'Perfect for building basic learning foundations.', books: ['Picture Story Books (5)', 'Activity Workbooks (3)', 'Coloring Books (2)', 'Number & Alphabet Charts'], subjects: ['Pre-reading', 'Pre-Math', 'Creative Arts', 'Motor Skills'], features: ['Age-appropriate content', 'Interactive activities', 'Parent guidance included', 'Colorful illustrations'] },
@@ -68,7 +69,10 @@ const SelectPackageScreen = ({ route, navigation }) => {
                     <Text style={styles.detailTitle}>Key Features</Text>
                     {pkg.features.map((feature, i) => <Text key={i} style={styles.featureItem}><MaterialIcons name="check" color={Colors.success} /> {feature}</Text>)}
                 </View>
-                <TouchableOpacity style={styles.orderButton}>
+                <TouchableOpacity 
+                    style={styles.orderButton}
+                    onPress={() => navigation.navigate(NavigationString.DeliveryAddress, { child: child, pkg: pkg })}
+                >
                     <MaterialCommunityIcons name="cart-check" size={scale(18)} color={Colors.textLight} />
                     <Text style={styles.orderButtonText}>Order This Bundle</Text>
                 </TouchableOpacity>
@@ -85,7 +89,7 @@ const SelectPackageScreen = ({ route, navigation }) => {
                 </TouchableOpacity>
                 <View>
                     <Text style={styles.headerTitle}>Select Bundle</Text>
-                    <Text style={styles.headerSubtitle}>For {child.name} • {child.standard}</Text>
+                    <Text style={styles.headerSubtitle}>For {child.name} • {child.standard} standard</Text>
                 </View>
                 <View style={{ width: scale(24) }} />
             </View>
@@ -281,6 +285,7 @@ const styles = StyleSheet.create({
         fontSize: fontScale(16),
         fontWeight: 'bold',
         marginLeft: scale(8),
+        
     },
 });
 

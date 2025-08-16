@@ -23,6 +23,21 @@ export default function (Stack) {
         component={Screen.SelectPackage}
         options={{ headerShown: false }}
       />
+      <Stack.Screen
+        name={NavigationString.DeliveryAddress}
+        component={Screen.Delivery}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name={NavigationString.PaymentDetailes}
+        component={Screen.Payment}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name={NavigationString.Order}
+        component={Screen.Order}
+        options={{ headerShown: false }}
+      />
     </>
   );
 }
