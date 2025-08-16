@@ -71,7 +71,7 @@ const Order = ({ route, navigation }) => {
                         <Text style={styles.totalValue}>₹{total}</Text>
                     </View>
 
-                    <TouchableOpacity style={styles.continueButton} onPress={handleContinueShopping}>
+                    <TouchableOpacity onPress={()=> navigation.navigate("YourChildrenScreen")} style={styles.continueButton} onPress={handleContinueShopping}>
                         <Text style={styles.continueButtonText}>Continue Shopping</Text>
                     </TouchableOpacity>
                 </View>
