@@ -9,53 +9,61 @@ import {
     StatusBar,
     KeyboardAvoidingView,
     Platform,
-    Dimensions,
-    ScrollView
+    ScrollView,
+    Alert
 } from 'react-native';
+import { useDispatch } from 'react-redux';
+import { loginSuccess } from '../../Redux/auth/authSlice';
 import OtpInputs from 'react-native-otp-inputs';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-const Colors = {
-    primary: '#007BFF',
-    button: '#28a745',
-    backgroundLight: '#F8F9FA',
-    backgroundPrimaryLight: '#FFFFFF',
-    WhiteBackgroudcolor: '#FFFFFF',
-    textLight: '#FFFFFF',
-    textPrimary: '#212529',
-    textSecondary: '#6C757D',
-    textMuted: '#6C757D',
-    textDark: '#343A40',
-    border: '#CED4DA',
-    borderLight: '#E0E0E0',
-};
+import Colors from '../../styles/colors';
+import { scale, fontScale, verticalScale, moderateScale } from '../../styles/stylesconfig';
 
-const { width } = Dimensions.get('window');
-const guidelineBaseWidth = 375;
-const scale = size => (width / guidelineBaseWidth) * size;
-const fontScale = size => size * (width / guidelineBaseWidth);
-const verticalScale = size => (Dimensions.get('window').height / 812) * size;
-const moderateScale = (size, factor = 0.5) => size + (scale(size) - size) * factor;
-
-const WelcomeScreen = () => {
+const WelcomeScreen = ({ navigation }) => {
     const [otpSent, setOtpSent] = useState(false);
+    const [mobileNumber, setMobileNumber] = useState('');
+    const [otp, setOtp] = useState("");
+
+    const dispatch = useDispatch();
 
     const handleSendVerificationCode = () => {
-        setTimeout(() => {
-            setOtpSent(true);
-        }, 1500);
+        if (mobileNumber.length < 10) {
+            Alert.alert("Validation Error", "Please enter a valid 10-digit mobile number.");
+            return;
+        }
+        setOtpSent(true);
+    };
+
+    const handleVerify = () => {
+        if (otp.length < 6) {
+            Alert.alert("Incomplete OTP", "Please enter all 6 digits to continue.");
+            return;
+        }
+
+        const customToken = `custom_token_${Date.now()}_${mobileNumber}`;
+
+        dispatch(loginSuccess({
+            user: { mobileNumber },
+            token: customToken
+        }));
+
+        navigation.navigate("AddChild", { mobileNumber: mobileNumber });
     };
 
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor={Colors.backgroundLight} />
             <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                behavior={Platform.OS === "ios" ? "padding" : "padding"}
                 style={{ flex: 1 }}
             >
-                <ScrollView contentContainerStyle={styles.content}>
+                <ScrollView
+                    contentContainerStyle={styles.content}
+                    keyboardShouldPersistTaps="handled"
+                >
                     <View style={styles.headerContainer}>
                         <View style={styles.logoContainer}>
                             <MaterialCommunityIcons name="book-open-variant" size={scale(35)} color={Colors.textLight} />
@@ -89,10 +97,13 @@ const WelcomeScreen = () => {
                                 <Text style={styles.countryCode}>+91</Text>
                                 <TextInput
                                     style={styles.input}
-                                    placeholder="12345-67890"
+                                    placeholder="1234567890"
                                     placeholderTextColor={Colors.textMuted}
                                     keyboardType="phone-pad"
                                     editable={!otpSent}
+                                    value={mobileNumber}
+                                    onChangeText={setMobileNumber}
+                                    maxLength={10}
                                 />
                             </View>
                         </View>
@@ -103,32 +114,36 @@ const WelcomeScreen = () => {
                             </TouchableOpacity>
                         ) : (
                             <>
+                                <View style={styles.otpSentContainer}>
+                                    <MaterialIcons name="check-circle" size={scale(16)} color={Colors.success} />
+                                    <Text style={styles.otpSentText}>OTP sent to +91 {mobileNumber}</Text>
+                                </View>
+
                                 <TouchableOpacity style={styles.resendOtpButton}>
                                     <Text style={styles.resendOtpText}>Resend OTP</Text>
                                 </TouchableOpacity>
 
-                                <Text style={styles.inputLabel} >Enter Verification Code</Text>
-                                
+                                <Text style={styles.inputLabel}>Enter Verification Code</Text>
+
                                 <OtpInputs
                                     autofillFromClipboard={false}
-                                    handleChange={(code) => console.log(code)}
                                     numberOfInputs={6}
                                     autoFocus
                                     style={styles.otpContainer}
                                     inputContainerStyles={styles.otpBox}
                                     inputStyles={styles.otpText}
+                                    handleChange={setOtp}
                                 />
 
-                                <TouchableOpacity style={styles.verifyButton}>
+                                <TouchableOpacity onPress={handleVerify} style={styles.verifyButton}>
                                     <Text style={styles.buttonText}>Verify & Continue</Text>
                                 </TouchableOpacity>
                             </>
                         )}
+                        <Text style={styles.termsText}>
+                            By continuing, you agree to our Terms of Service and Privacy Policy.
+                        </Text>
                     </View>
-
-                    <Text style={styles.termsText}>
-                        By continuing, you agree to our Terms of Service and Privacy Policy. We're committed to protecting your learning data.
-                    </Text>
 
                     <View style={styles.footerContainer}>
                         <View style={styles.footerItem}>
@@ -194,7 +209,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginHorizontal: scale(5),
         borderWidth: 1,
-        borderColor: '#E0E0E0',
+        borderColor: Colors.borderLight,
     },
     statText: {
         fontSize: fontScale(12),
@@ -268,7 +283,7 @@ const styles = StyleSheet.create({
     },
     verifyButton: {
         width: '100%',
-        backgroundColor: '#28a745',
+        backgroundColor: Colors.button,
         paddingVertical: verticalScale(14),
         borderRadius: moderateScale(8),
         alignItems: 'center',
@@ -278,6 +293,18 @@ const styles = StyleSheet.create({
         color: Colors.textLight,
         fontSize: fontScale(16),
         fontWeight: 'bold',
+    },
+    otpSentContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        width: '100%',
+        justifyContent: 'center',
+        marginBottom: verticalScale(15),
+    },
+    otpSentText: {
+        color: Colors.success,
+        fontSize: fontScale(14),
+        marginLeft: scale(5),
     },
     resendOtpButton: {
         width: '100%',
@@ -296,7 +323,7 @@ const styles = StyleSheet.create({
     otpContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        width: '90%',
+        width: '100%',
         alignSelf: 'center'
     },
     otpBox: {
@@ -305,11 +332,13 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderRadius: moderateScale(8),
         borderColor: Colors.border,
-        textAlign: 'center',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     otpText: {
         fontSize: fontScale(18),
-        color: Colors.textDark
+        color: Colors.textDark,
+        textAlign: 'center',
     },
     termsText: {
         fontSize: fontScale(11),
