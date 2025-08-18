@@ -29,7 +29,6 @@ const AddChildScreen = ({ route, navigation }) => {
     const persistedChildren = useSelector((state) => state.child.children);
     const persistedMobileNumber = useSelector((state) => state.auth.user?.mobileNumber);
     
-    // नेविगेशन से editMode पैरामीटर प्राप्त करें
     const isEditMode = route.params?.editMode || false;
 
     const mobileNumber = route.params?.mobileNumber || persistedMobileNumber;
@@ -46,8 +45,7 @@ const AddChildScreen = ({ route, navigation }) => {
     
     useFocusEffect(
         useCallback(() => {
-            // अगर एडिट मोड है, तो Redux से मौजूदा डेटा लोड करें
-            // वरना, एक नया खाली फॉर्म दिखाएं
+      
             const initialForms = isEditMode && persistedChildren.length > 0
                 ? persistedChildren
                 : [{ name: '', age: '', standard: '', schoolName: '' }];
@@ -105,24 +103,19 @@ const AddChildScreen = ({ route, navigation }) => {
             child => child.name && child.age && child.standard && child.schoolName
         );
 
-        // अगर कोई बच्चा जोड़ा गया है लेकिन उसकी जानकारी अधूरी है तो अलर्ट दिखाएं
         if (localChildren.some(c => c.name || c.age || c.standard || c.schoolName) && childrenToSave.length !== localChildren.length) {
             Alert.alert("Incomplete Details", "Please fill all details for the children you've added.");
             return;
         }
 
-        // अगर कोई भी बच्चा नहीं भरा गया है तो बस नेविगेट करें
         if (childrenToSave.length === 0) {
             navigation.navigate(NavigationString.YourChildren);
             return;
         }
 
-        // सबसे महत्वपूर्ण बदलाव: सेव करने का लॉजिक
         if (isEditMode) {
-            // एडिट मोड में, पूरी लिस्ट को बदलें
             dispatch(setChildren(childrenToSave));
         } else {
-            // ऐड मोड में, नए बच्चों को पुरानी लिस्ट में जोड़ें
             dispatch(setChildren([...persistedChildren, ...childrenToSave]));
         }
 

@@ -63,7 +63,6 @@ const YourChildrenScreen = ({ navigation }) => {
                                 <FontAwesome name="users" size={scale(16)} color={Colors.primary} />
                                 <Text style={styles.sectionTitle}>Your Children</Text>
                             </View>
-                            {/* यहाँ बदलाव किया गया है */}
                             <TouchableOpacity onPress={() => navigation.navigate(NavigationString.AddChild, { editMode: true })}>
                                 <MaterialIcons name="edit" size={scale(18)} color={Colors.textMuted} />
                             </TouchableOpacity>
@@ -132,7 +131,6 @@ const YourChildrenScreen = ({ navigation }) => {
                             <MaterialCommunityIcons name="star-outline" size={scale(22)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>Wishlist</Text>
                         </TouchableOpacity>
-                         {/* यहाँ कोई बदलाव नहीं है, यह हमेशा एक नया बच्चा जोड़ने के लिए है */}
                          <TouchableOpacity style={styles.exploreItem} onPress={() => navigation.navigate(NavigationString.AddChild)}>
                             <MaterialCommunityIcons name="account-plus-outline" size={scale(20)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>Add Another Child</Text>
