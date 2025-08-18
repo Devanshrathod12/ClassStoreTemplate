@@ -1,3 +1,4 @@
+// App.js
 import 'react-native-gesture-handler';
 import { StyleSheet, View, ActivityIndicator } from 'react-native';
 import React from 'react';

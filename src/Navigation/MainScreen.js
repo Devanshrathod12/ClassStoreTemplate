@@ -3,11 +3,11 @@ import * as Screen from '../Screen';
 export default function (Stack) {
   return (
     <>
-      {/* <Stack.Screen
+      <Stack.Screen
         name={NavigationString.WelComeScreen}
         component={Screen.WelComeScreen}
         options={{ headerShown: false }}
-      /> */}
+      />
       <Stack.Screen
         name={NavigationString.AddChild}
         component={Screen.AddChild}

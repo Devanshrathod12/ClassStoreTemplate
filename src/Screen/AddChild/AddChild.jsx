@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -15,31 +15,48 @@ import {
     Alert
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { addChild, removeChild, updateChild } from '../../Redux/childSlice/childSlice';
+import { useFocusEffect } from '@react-navigation/native';
+import { setChildren } from '../../Redux/childSlice/childSlice';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import Colors from '../../styles/colors';
 import { scale, fontScale, verticalScale, moderateScale } from '../../styles/stylesconfig';
+import NavigationString from '../../Navigation/NavigationString';
 
 const AddChildScreen = ({ route, navigation }) => {
     const dispatch = useDispatch();
-    const { children } = useSelector((state) => state.child);
+    const persistedChildren = useSelector((state) => state.child.children);
     const persistedMobileNumber = useSelector((state) => state.auth.user?.mobileNumber);
     
+    // नेविगेशन से editMode पैरामीटर प्राप्त करें
+    const isEditMode = route.params?.editMode || false;
+
     const mobileNumber = route.params?.mobileNumber || persistedMobileNumber;
 
+    const [localChildren, setLocalChildren] = useState([]);
     const [isDropdownVisible, setDropdownVisible] = useState(false);
     const [dropdownData, setDropdownData] = useState([]);
     const [currentChildIndex, setCurrentChildIndex] = useState(null);
     const [currentField, setCurrentField] = useState(null);
     const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
 
-    const ageDropdownRefs = useRef({});
-    const classDropdownRefs = useRef({});
+    const ageDropdownRefs = useRef([]);
+    const classDropdownRefs = useRef([]);
+    
+    useFocusEffect(
+        useCallback(() => {
+            // अगर एडिट मोड है, तो Redux से मौजूदा डेटा लोड करें
+            // वरना, एक नया खाली फॉर्म दिखाएं
+            const initialForms = isEditMode && persistedChildren.length > 0
+                ? persistedChildren
+                : [{ name: '', age: '', standard: '', schoolName: '' }];
+            setLocalChildren(initialForms);
+        }, [isEditMode, persistedChildren])
+    );
 
     const ageOptions = [
-        '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', 
+        '3', '4', '5', '6', '7', '8', '9', '10', '11', '12',
         '13', '14', '15', '16', '17', '18', '19', '20', '21+'
     ];
 
@@ -49,19 +66,22 @@ const AddChildScreen = ({ route, navigation }) => {
         '7', '8', '9', '10', '11', '12'
     ];
 
-
     const handleAddChild = () => {
-        dispatch(addChild());
+        setLocalChildren([...localChildren, { name: '', age: '', standard: '', schoolName: '' }]);
     };
-    
+
     const handleRemoveChild = (index) => {
-        if (children.length > 1) {
-            dispatch(removeChild(index));
+        if (localChildren.length > 1) {
+            const newChildren = [...localChildren];
+            newChildren.splice(index, 1);
+            setLocalChildren(newChildren);
         }
     };
 
     const handleChildDataChange = (index, field, value) => {
-        dispatch(updateChild({ index, field, value }));
+        const newChildren = [...localChildren];
+        newChildren[index] = { ...newChildren[index], [field]: value };
+        setLocalChildren(newChildren);
     };
 
     const openDropdown = (index, field, ref) => {
@@ -80,15 +100,39 @@ const AddChildScreen = ({ route, navigation }) => {
         setDropdownVisible(false);
     };
 
-    const handleContinue = () => {
-        const firstChild = children[0];
-        if (!firstChild.name || !firstChild.age || !firstChild.standard || !firstChild.schoolName) {
-            Alert.alert("Incomplete Details", "Please fill all details for at least the first child.");
+    const handleSaveAndContinue = () => {
+        const childrenToSave = localChildren.filter(
+            child => child.name && child.age && child.standard && child.schoolName
+        );
+
+        // अगर कोई बच्चा जोड़ा गया है लेकिन उसकी जानकारी अधूरी है तो अलर्ट दिखाएं
+        if (localChildren.some(c => c.name || c.age || c.standard || c.schoolName) && childrenToSave.length !== localChildren.length) {
+            Alert.alert("Incomplete Details", "Please fill all details for the children you've added.");
             return;
         }
-        navigation.navigate("YourChildrenScreen");
+
+        // अगर कोई भी बच्चा नहीं भरा गया है तो बस नेविगेट करें
+        if (childrenToSave.length === 0) {
+            navigation.navigate(NavigationString.YourChildren);
+            return;
+        }
+
+        // सबसे महत्वपूर्ण बदलाव: सेव करने का लॉजिक
+        if (isEditMode) {
+            // एडिट मोड में, पूरी लिस्ट को बदलें
+            dispatch(setChildren(childrenToSave));
+        } else {
+            // ऐड मोड में, नए बच्चों को पुरानी लिस्ट में जोड़ें
+            dispatch(setChildren([...persistedChildren, ...childrenToSave]));
+        }
+
+        navigation.navigate(NavigationString.YourChildrenScreen);
     };
-    
+
+    const handleSkip = () => {
+        navigation.navigate(NavigationString.YourChildrenScreen);
+    };
+
     const DropdownModal = () => (
         <Modal
             transparent={true}
@@ -144,15 +188,15 @@ const AddChildScreen = ({ route, navigation }) => {
                         </View>
                         <Text style={styles.formSubtitle}>Add details for each child to get personalized book recommendations</Text>
 
-                        {children.map((child, index) => (
+                        {localChildren.map((child, index) => (
                             <View key={index} style={styles.childFormSection}>
-                                {index > 0 && (
-                                     <TouchableOpacity style={styles.removeChildButton} onPress={() => handleRemoveChild(index)}>
+                                {localChildren.length > 1 && (
+                                    <TouchableOpacity style={styles.removeChildButton} onPress={() => handleRemoveChild(index)}>
                                         <MaterialCommunityIcons name="close-circle" size={scale(22)} color={Colors.danger} />
-                                     </TouchableOpacity>
+                                    </TouchableOpacity>
                                 )}
                                 <Text style={styles.childLabel}>Child {index + 1}</Text>
-                                
+
                                 <Text style={styles.inputLabel}>Name</Text>
                                 <TextInput
                                     style={styles.input}
@@ -163,19 +207,19 @@ const AddChildScreen = ({ route, navigation }) => {
                                 />
 
                                 <Text style={styles.inputLabel}>Age</Text>
-                                <TouchableOpacity 
+                                <TouchableOpacity
                                     ref={el => ageDropdownRefs.current[index] = el}
-                                    style={styles.dropdown} 
+                                    style={styles.dropdown}
                                     onPress={() => openDropdown(index, 'age', ageDropdownRefs.current[index])}
                                 >
                                     <Text style={child.age ? styles.dropdownTextSelected : styles.dropdownText}>{child.age || 'Select age'}</Text>
                                     <MaterialIcons name="keyboard-arrow-down" size={scale(20)} color={Colors.textMuted} />
                                 </TouchableOpacity>
-                                
+
                                 <Text style={styles.inputLabel}>Class</Text>
-                                <TouchableOpacity 
+                                <TouchableOpacity
                                     ref={el => classDropdownRefs.current[index] = el}
-                                    style={styles.dropdown} 
+                                    style={styles.dropdown}
                                     onPress={() => openDropdown(index, 'standard', classDropdownRefs.current[index])}
                                 >
                                     <Text style={child.standard ? styles.dropdownTextSelected : styles.dropdownText}>{child.standard || 'Select class'}</Text>
@@ -192,23 +236,23 @@ const AddChildScreen = ({ route, navigation }) => {
                                 />
                             </View>
                         ))}
-                         <TouchableOpacity style={styles.addChildButton} onPress={handleAddChild}>
+                        <TouchableOpacity style={styles.addChildButton} onPress={handleAddChild}>
                             <MaterialIcons name="add" size={scale(18)} color={Colors.primary} />
                             <Text style={styles.addChildText}>Add Another Child</Text>
                         </TouchableOpacity>
 
                         <View style={styles.footerButtons}>
-                            <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
+                            <TouchableOpacity style={styles.continueButton} onPress={handleSaveAndContinue}>
                                 <Text style={styles.continueButtonText}>Continue to ClassStore</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.skipButton} onPress={handleContinue}>
+                            <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
                                 <Text style={styles.skipButtonText}>Skip</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
-                     <Text style={styles.termsText}>
-                                                By continuing, you agree to our Terms of Service and Privacy Policy.
-                                            </Text>
+                    <Text style={styles.termsText}>
+                        By continuing, you agree to our Terms of Service and Privacy Policy.
+                    </Text>
                 </ScrollView>
                 <DropdownModal />
             </KeyboardAvoidingView>

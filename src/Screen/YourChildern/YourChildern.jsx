@@ -31,11 +31,11 @@ const YourChildrenScreen = ({ navigation }) => {
     };
 
     const handleLogout = () => {
-        dispatch(resetChildren());
         dispatch(logout());
+        dispatch(resetChildren());
     };
 
-    const hasChildrenToShow = children.some(c => c.name || c.age || c.standard);
+    const hasChildrenToShow = children.length > 0;
 
     return (
         <SafeAreaView style={styles.container}>
@@ -63,14 +63,12 @@ const YourChildrenScreen = ({ navigation }) => {
                                 <FontAwesome name="users" size={scale(16)} color={Colors.primary} />
                                 <Text style={styles.sectionTitle}>Your Children</Text>
                             </View>
-                            <TouchableOpacity onPress={() => navigation.navigate(NavigationString.AddChild)}>
+                            {/* यहाँ बदलाव किया गया है */}
+                            <TouchableOpacity onPress={() => navigation.navigate(NavigationString.AddChild, { editMode: true })}>
                                 <MaterialIcons name="edit" size={scale(18)} color={Colors.textMuted} />
                             </TouchableOpacity>
                         </View>
                         {children.map((child, index) => {
-                            if (!child.name && !child.age && !child.standard) {
-                                return null;
-                            }
                             return (
                                 <View key={index} style={styles.childItemContainer}>
                                     <View style={styles.childInfo}>
@@ -110,7 +108,6 @@ const YourChildrenScreen = ({ navigation }) => {
                     </View>
                 </View>
                 
-                {/* Updated Explore Section */}
                 <View style={styles.section}>
                     <View style={styles.exploreCard}>
                         <Text style={styles.exploreTitle}>Explore ClassStore</Text>
@@ -135,6 +132,7 @@ const YourChildrenScreen = ({ navigation }) => {
                             <MaterialCommunityIcons name="star-outline" size={scale(22)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>Wishlist</Text>
                         </TouchableOpacity>
+                         {/* यहाँ कोई बदलाव नहीं है, यह हमेशा एक नया बच्चा जोड़ने के लिए है */}
                          <TouchableOpacity style={styles.exploreItem} onPress={() => navigation.navigate(NavigationString.AddChild)}>
                             <MaterialCommunityIcons name="account-plus-outline" size={scale(20)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>Add Another Child</Text>
@@ -357,10 +355,10 @@ const styles = StyleSheet.create({
         marginBottom: verticalScale(8),
     },
     orderNowButton: {
-        backgroundColor: '#F44336', // Red
+        backgroundColor: '#F44336',
     },
     schoolBooksButton: {
-        backgroundColor: '#2196F3', // Blue
+        backgroundColor: '#2196F3',
     },
     exploreButtonText: {
         color: Colors.textLight,

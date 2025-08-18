@@ -1,29 +1,22 @@
 import { createSlice } from '@reduxjs/toolkit';
 
 const initialState = {
-    children: [{ name: '', age: '', standard: '', schoolName: '' }],
+    children: [],
 };
 
 const childSlice = createSlice({
     name: 'child',
     initialState,
     reducers: {
-        addChild: (state) => {
-            state.children.push({ name: '', age: '', standard: '', schoolName: '' });
-        },
-        removeChild: (state, action) => {
-            state.children.splice(action.payload, 1);
-        },
-        updateChild: (state, action) => {
-            const { index, field, value } = action.payload;
-            state.children[index][field] = value;
+        setChildren: (state, action) => {
+            state.children = action.payload;
         },
         resetChildren: (state) => {
-            state.children = [{ name: '', age: '', standard: '', schoolName: '' }];
+            state.children = [];
         }
     },
 });
 
-export const { addChild, removeChild, updateChild, resetChildren } = childSlice.actions;
+export const { setChildren, resetChildren } = childSlice.actions;
 
 export default childSlice.reducer;
