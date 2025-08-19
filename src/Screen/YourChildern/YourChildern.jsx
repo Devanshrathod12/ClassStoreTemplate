@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View,
     Text,
@@ -6,36 +6,131 @@ import {
     SafeAreaView,
     StatusBar,
     ScrollView,
-    TouchableOpacity
+    TouchableOpacity,
+    ActivityIndicator,
+    Alert
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
+import { useFocusEffect } from '@react-navigation/native';
 import { logout } from '../../Redux/auth/authSlice';
 import { resetChildren } from '../../Redux/childSlice/childSlice';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import FontAwesome from 'react-native-vector-icons/FontAwesome';
-
 import Colors from '../../styles/colors';
 import { scale, fontScale, verticalScale, moderateScale } from '../../styles/stylesconfig';
 import NavigationString from '../../Navigation/NavigationString';
+import { apiGet } from '../../api/api';
+
+const avatarColors = ['#FFC107', '#4CAF50', '#2196F3', '#E91E63', '#9C27B0', '#FF5722'];
+
+const getInitials = (name) => {
+    if (!name) return '';
+    return name.charAt(0).toUpperCase();
+};
+
+const ChildCard = ({ child, index, onPress }) => {
+    const cardColor = avatarColors[index % avatarColors.length];
+    return (
+        <TouchableOpacity style={styles.childCard} onPress={onPress}>
+            <View style={[styles.cardAvatar, { backgroundColor: cardColor }]}>
+                <Text style={styles.cardAvatarText}>{getInitials(child.name)}</Text>
+            </View>
+            <Text style={styles.cardName}>{child.name || 'No Name'}</Text>
+            <View style={styles.cardDetailsContainer}>
+                <View style={styles.cardDetailItem}>
+                    <MaterialCommunityIcons name="cake-variant-outline" size={scale(14)} color={Colors.textSecondary} />
+                    <Text style={styles.cardDetailText}>{child.age ? `${child.age} years` : 'N/A'}</Text>
+                </View>
+                <View style={styles.cardDetailItem}>
+                    <MaterialCommunityIcons name="school-outline" size={scale(14)} color={Colors.textSecondary} />
+                    <Text style={styles.cardDetailText}>{child.class_name || 'N/A'}</Text>
+                </View>
+            </View>
+            <Text style={styles.cardSchoolName} numberOfLines={1}>{child.school_name || 'School not available'}</Text>
+        </TouchableOpacity>
+    );
+};
+
+const EmptyStateCard = ({ onPress }) => (
+    <View style={styles.emptyStateContainer}>
+        <MaterialCommunityIcons name="account-plus-outline" size={scale(40)} color={Colors.primary} />
+        <Text style={styles.emptyStateTitle}>Add your first child</Text>
+        <Text style={styles.emptyStateSubtitle}>
+            Add a child to get personalized book recommendations and start ordering.
+        </Text>
+        <TouchableOpacity style={styles.emptyStateButton} onPress={onPress}>
+            <Text style={styles.emptyStateButtonText}>Add Child</Text>
+        </TouchableOpacity>
+    </View>
+);
 
 const YourChildrenScreen = ({ navigation }) => {
     const dispatch = useDispatch();
     const { user } = useSelector((state) => state.auth);
-    const { children } = useSelector((state) => state.child);
     const mobileNumber = user?.mobileNumber || '';
 
-    const getInitials = (name) => {
-        if (!name) return '';
-        return name.charAt(0).toUpperCase();
-    };
+    const [children, setChildren] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
 
+    useFocusEffect(
+        useCallback(() => {
+            const fetchChildren = async () => {
+                setIsLoading(true);
+                try {
+                    const response = await apiGet("/api/v1/children");
+                    if (response && Array.isArray(response)) {
+                        setChildren(response);
+                    } else {
+                        setChildren([]);
+                    }
+                } catch (error) {
+                    console.error("Bachho ki list fetch karne mein error:", error);
+                    setChildren([]);
+                    Alert.alert("Error", "Could not fetch children data.");
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            fetchChildren();
+        }, [])
+    );
+    
     const handleLogout = () => {
         dispatch(logout());
         dispatch(resetChildren());
     };
 
-    const hasChildrenToShow = children.length > 0;
+    const renderChildrenContent = () => {
+        if (isLoading) {
+            return (
+                <View style={styles.loaderContainer}>
+                    <ActivityIndicator size="large" color={Colors.primary} />
+                </View>
+            );
+        }
+
+        if (children.length > 0) {
+            return (
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.horizontalScrollContainer}
+                >
+                    {children.map((child, index) => (
+                        <ChildCard
+                            key={child.id}
+                            child={child}
+                            index={index}
+                            onPress={() => navigation.navigate(NavigationString.SelectPackage, { child: child })}
+                        />
+                    ))}
+                </ScrollView>
+            );
+        }
+
+        return <EmptyStateCard onPress={() => navigation.navigate(NavigationString.AddChild)} />;
+    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -56,44 +151,23 @@ const YourChildrenScreen = ({ navigation }) => {
                         <Text style={styles.welcomeNumber}>+91 {mobileNumber}</Text>
                     </View>
                 </View>
-                {hasChildrenToShow && (
-                    <View style={styles.childrenSectionCard}>
-                        <View style={styles.sectionHeader}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <FontAwesome name="users" size={scale(16)} color={Colors.primary} />
-                                <Text style={styles.sectionTitle}>Your Children</Text>
-                            </View>
-                            <TouchableOpacity onPress={() => navigation.navigate(NavigationString.AddChild, { editMode: true })}>
-                                <MaterialIcons name="edit" size={scale(18)} color={Colors.textMuted} />
+
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>Your Children</Text>
+                        {!isLoading && children.length > 0 && (
+                             <TouchableOpacity 
+                                style={styles.editButton}
+                                onPress={() => navigation.navigate(NavigationString.AddChild, { editMode: true })}
+                            >
+                                <MaterialIcons name="edit" size={scale(18)} color={Colors.primary} />
+                                <Text style={styles.editButtonText}>Edit</Text>
                             </TouchableOpacity>
-                        </View>
-                        {children.map((child, index) => {
-                            return (
-                                <View key={index} style={styles.childItemContainer}>
-                                    <View style={styles.childInfo}>
-                                        <View style={styles.childAvatar}>
-                                            <Text style={styles.childAvatarText}>{getInitials(child.name)}</Text>
-                                        </View>
-                                        <View>
-                                            <Text style={styles.childName}>{child.name || 'No Name'}</Text>
-                                            <Text style={styles.childDetails}>
-                                                {child.age ? `${child.age} years` : ''}{child.standard ? ` - ${child.standard}` : ''}
-                                            </Text>
-                                            <Text style={styles.childSchool}>{child.schoolName}</Text>
-                                        </View>
-                                    </View>
-                                    <TouchableOpacity
-                                        style={styles.orderButton}
-                                        onPress={() => navigation.navigate(NavigationString.SelectPackage, { child: child })}
-                                    >
-                                        <MaterialCommunityIcons name="cart-outline" size={scale(16)} color={Colors.textLight} />
-                                        <Text style={styles.orderButtonText}>Order Now {child.standard ? `- ${child.standard} Bundle` : ''}</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            );
-                        })}
+                        )}
                     </View>
-                )}
+                    {renderChildrenContent()}
+                </View>
+
                 <View style={styles.statsRow}>
                     <View style={styles.statBox}>
                         <MaterialCommunityIcons name="book-open-page-variant-outline" size={scale(22)} color={Colors.primary} />
@@ -110,15 +184,10 @@ const YourChildrenScreen = ({ navigation }) => {
                 <View style={styles.section}>
                     <View style={styles.exploreCard}>
                         <Text style={styles.exploreTitle}>Explore ClassStore</Text>
-                        <TouchableOpacity style={[styles.exploreButton, styles.orderNowButton]}>
-                            <MaterialCommunityIcons name="cart-arrow-down" size={scale(18)} color={Colors.textLight} />
-                            <Text style={styles.exploreButtonText}>Order Now</Text>
+                        <TouchableOpacity style={styles.exploreItem} onPress={() => navigation.navigate(NavigationString.AddChild)}>
+                            <MaterialCommunityIcons name="account-plus-outline" size={scale(20)} color={Colors.textSecondary} />
+                            <Text style={styles.exploreItemText}>Add Another Child</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={[styles.exploreButton, styles.schoolBooksButton]}>
-                            <MaterialCommunityIcons name="book-search-outline" size={scale(18)} color={Colors.textLight} />
-                            <Text style={styles.exploreButtonText}>School-Specific Books</Text>
-                        </TouchableOpacity>
-
                         <TouchableOpacity style={styles.exploreItem}>
                             <MaterialCommunityIcons name="cart-outline" size={scale(20)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>My Cart</Text>
@@ -127,27 +196,13 @@ const YourChildrenScreen = ({ navigation }) => {
                             <MaterialCommunityIcons name="receipt-text-outline" size={scale(20)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>My Orders</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.exploreItem}>
-                            <MaterialCommunityIcons name="star-outline" size={scale(22)} color={Colors.textSecondary} />
-                            <Text style={styles.exploreItemText}>Wishlist</Text>
-                        </TouchableOpacity>
-                         <TouchableOpacity style={styles.exploreItem} onPress={() => navigation.navigate(NavigationString.AddChild)}>
-                            <MaterialCommunityIcons name="account-plus-outline" size={scale(20)} color={Colors.textSecondary} />
-                            <Text style={styles.exploreItemText}>Add Another Child</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.exploreItem}>
-                            <MaterialCommunityIcons name="school-outline" size={scale(20)} color={Colors.textSecondary} />
-                            <Text style={styles.exploreItemText}>School Resources</Text>
-                        </TouchableOpacity>
                         <TouchableOpacity style={[styles.exploreItem, {borderBottomWidth: 0}]}>
                             <MaterialCommunityIcons name="cog-outline" size={scale(20)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>Account Settings</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
-
                 <Text style={styles.footerText}>Made with ❤️ for learners everywhere</Text>
-
             </ScrollView>
         </SafeAreaView>
     );
@@ -160,12 +215,14 @@ const styles = StyleSheet.create({
     },
     content: {
         flexGrow: 1,
-        alignItems: 'center',
-        paddingHorizontal: scale(16),
         paddingBottom: verticalScale(30),
     },
+    loaderContainer: {
+        height: verticalScale(150),
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     headerContainer: {
-        width: '100%',
         alignItems: 'center',
         paddingVertical: verticalScale(10),
     },
@@ -187,11 +244,11 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: Colors.success,
-        width: '100%',
         paddingVertical: verticalScale(12),
         paddingHorizontal: scale(16),
         borderRadius: moderateScale(12),
         marginTop: verticalScale(10),
+        marginHorizontal: scale(16),
     },
     welcomeIconCircle: {
         width: scale(32),
@@ -214,92 +271,131 @@ const styles = StyleSheet.create({
     },
     section: {
         width: '100%',
-        marginTop: verticalScale(20),
-    },
-    childrenSectionCard: {
-        width: '100%',
-        marginTop: verticalScale(20),
-        backgroundColor: Colors.WhiteBackgroudcolor,
-        borderRadius: moderateScale(12),
-        padding: moderateScale(12),
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
+        marginTop: verticalScale(25),
     },
     sectionHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: verticalScale(10),
-        paddingHorizontal: scale(4)
+        marginBottom: verticalScale(15),
+        paddingHorizontal: scale(16)
     },
     sectionTitle: {
+        fontSize: fontScale(18),
+        fontWeight: 'bold',
+        color: Colors.textPrimary,
+    },
+    editButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#e7f3ff',
+        paddingHorizontal: scale(10),
+        paddingVertical: verticalScale(5),
+        borderRadius: moderateScale(8),
+    },
+    editButtonText: {
+        color: Colors.primary,
+        fontWeight: 'bold',
+        marginLeft: scale(4),
+        fontSize: fontScale(13),
+    },
+    horizontalScrollContainer: {
+        paddingHorizontal: scale(16),
+        paddingVertical: verticalScale(5),
+    },
+    childCard: {
+        backgroundColor: Colors.WhiteBackgroudcolor,
+        borderRadius: moderateScale(16),
+        padding: moderateScale(16),
+        alignItems: 'center',
+        width: scale(150),
+        marginRight: scale(12),
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+    },
+    cardAvatar: {
+        width: scale(60),
+        height: scale(60),
+        borderRadius: scale(30),
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: verticalScale(12),
+        borderWidth: 2,
+        borderColor: Colors.WhiteBackgroudcolor,
+    },
+    cardAvatarText: {
+        fontSize: fontScale(24),
+        fontWeight: 'bold',
+        color: Colors.textLight,
+    },
+    cardName: {
+        fontSize: fontScale(15),
+        fontWeight: 'bold',
+        color: Colors.textDark,
+        marginBottom: verticalScale(6),
+    },
+    cardDetailsContainer: {
+        flexDirection: 'row',
+        marginBottom: verticalScale(6),
+    },
+    cardDetailItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginHorizontal: scale(6),
+    },
+    cardDetailText: {
+        fontSize: fontScale(12),
+        color: Colors.textSecondary,
+        marginLeft: scale(4),
+    },
+    cardSchoolName: {
+        fontSize: fontScale(11),
+        color: Colors.textMuted,
+        textAlign: 'center',
+    },
+    emptyStateContainer: {
+        backgroundColor: Colors.WhiteBackgroudcolor,
+        borderRadius: moderateScale(16),
+        padding: moderateScale(20),
+        alignItems: 'center',
+        marginHorizontal: scale(16),
+        borderWidth: 1,
+        borderColor: Colors.borderLight,
+        borderStyle: 'dashed',
+    },
+    emptyStateTitle: {
         fontSize: fontScale(16),
         fontWeight: 'bold',
         color: Colors.textPrimary,
-        marginLeft: scale(8)
+        marginTop: verticalScale(10),
     },
-    childItemContainer: {
-        borderTopWidth: 1,
-        borderTopColor: Colors.borderLight,
-        paddingTop: verticalScale(12),
-        marginTop: verticalScale(5),
-    },
-    childInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    childAvatar: {
-        width: scale(40),
-        height: scale(40),
-        borderRadius: moderateScale(8),
-        backgroundColor: Colors.backgroundPrimaryLight,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: scale(12),
-    },
-    childAvatarText: {
-        fontSize: fontScale(18),
-        fontWeight: 'bold',
-        color: Colors.primary,
-    },
-    childName: {
-        fontSize: fontScale(14),
-        fontWeight: 'bold',
-        color: Colors.textDark,
-        marginBottom: verticalScale(2),
-    },
-    childDetails: {
-        fontSize: fontScale(12),
+    emptyStateSubtitle: {
+        fontSize: fontScale(13),
         color: Colors.textSecondary,
-        marginBottom: verticalScale(2),
+        textAlign: 'center',
+        marginTop: verticalScale(4),
+        marginBottom: verticalScale(15),
     },
-    childSchool: {
-        fontSize: fontScale(11),
-        color: Colors.textMuted,
-    },
-    orderButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
+    emptyStateButton: {
         backgroundColor: Colors.primary,
-        paddingVertical: verticalScale(10),
-        borderRadius: moderateScale(8),
-        marginTop: verticalScale(12),
+        paddingVertical: verticalScale(12),
+        paddingHorizontal: scale(25),
+        borderRadius: moderateScale(10),
     },
-    orderButtonText: {
+    emptyStateButtonText: {
         color: Colors.textLight,
         fontSize: fontScale(14),
         fontWeight: 'bold',
-        marginLeft: scale(8),
     },
     statsRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         width: '100%',
         marginTop: verticalScale(20),
+        paddingHorizontal: scale(16),
     },
     statBox: {
         backgroundColor: Colors.WhiteBackgroudcolor,
@@ -326,6 +422,7 @@ const styles = StyleSheet.create({
     exploreCard: {
         backgroundColor: Colors.WhiteBackgroudcolor,
         borderRadius: moderateScale(12),
+        marginHorizontal: scale(16),
         padding: moderateScale(12),
         elevation: 2,
         shadowColor: '#000',
@@ -338,26 +435,6 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: Colors.textPrimary,
         marginBottom: verticalScale(12),
-    },
-    exploreButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: verticalScale(12),
-        borderRadius: moderateScale(8),
-        marginBottom: verticalScale(8),
-    },
-    orderNowButton: {
-        backgroundColor: '#F44336',
-    },
-    schoolBooksButton: {
-        backgroundColor: '#2196F3',
-    },
-    exploreButtonText: {
-        color: Colors.textLight,
-        fontSize: fontScale(14),
-        fontWeight: 'bold',
-        marginLeft: scale(8),
     },
     exploreItem: {
         flexDirection: 'row',
@@ -372,26 +449,10 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         marginLeft: scale(12),
     },
-    logoutButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: Colors.danger,
-        borderRadius: moderateScale(8),
-        paddingVertical: verticalScale(12),
-        width: '100%',
-        marginTop: verticalScale(20),
-    },
-    logoutButtonText: {
-        color: Colors.textLight,
-        fontSize: fontScale(16),
-        fontWeight: 'bold',
-        marginLeft: scale(8),
-    },
     footerText: {
         fontSize: fontScale(12),
         color: Colors.textMuted,
-        marginTop: verticalScale(15),
+        marginTop: verticalScale(20),
         textAlign: 'center',
     },
 });

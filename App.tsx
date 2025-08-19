@@ -7,6 +7,8 @@ import { PersistGate } from 'redux-persist/integration/react';
 import { store, persistor } from './src/Redux/store';
 import Route from "./src/Navigation/Route";
 
+import FlashMessage from "react-native-flash-message";
+
 const App = () => {
   return (
     <Provider store={store}>
@@ -19,6 +21,12 @@ const App = () => {
         persistor={persistor}
       >
         <Route />
+
+      
+        <FlashMessage 
+          position="top"
+          floating={true} 
+        />
       </PersistGate>
     </Provider>
   );

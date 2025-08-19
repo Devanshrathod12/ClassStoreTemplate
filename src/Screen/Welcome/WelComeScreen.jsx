@@ -10,64 +10,179 @@ import {
     KeyboardAvoidingView,
     Platform,
     ScrollView,
-    Alert
+    ActivityIndicator
 } from 'react-native';
+import { showMessage } from "react-native-flash-message";
 import OtpInputs from 'react-native-otp-inputs';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import {apiPost} from "../../api/api"
+import { apiPost } from "../../api/api";
 import Colors from '../../styles/colors';
 import { scale, fontScale, verticalScale, moderateScale } from '../../styles/stylesconfig';
-
+import AsyncStorage from '@react-native-async-storage/async-storage';
 const WelcomeScreen = ({ navigation }) => {
     const [otpSent, setOtpSent] = useState(false);
     const [mobileNumber, setMobileNumber] = useState('');
     const [otp, setOtp] = useState("");
-
+    const [isLoading, setIsLoading] = useState(false);
 
     const handleSendVerificationCode = async () => {
         if (mobileNumber.length < 10) {
-            Alert.alert("Validation Error", "Please enter a valid 10-digit mobile number.");
+            showMessage({
+                message: "Galat Number",
+                description: "Please enter a valid 10-digit mobile number.",
+                type: "warning",
+            });
             return;
         }
-         try {
-            const paylod = {
-                mobile_number:mobileNumber
-            }
-            const responce = await apiPost("/api/v1/user/send-otp",paylod)
-            console.log(responce,"sotp")
-            if (responce.otp_sent) {
-                setOtpSent(true)
-                Alert.alert("Success",responce.message || `otp sent +91 ${mobileNumber}`)
+        setIsLoading(true);
+        try {
+            const payload = {
+                mobile_number: mobileNumber
+            };
+            const response = await apiPost("/api/v1/user/send-otp", payload);
+            if (response.otp_sent) {
+                setOtpSent(true);
+                showMessage({
+                    message: "OTP Bhej Diya Gaya Hai",
+                    description: response.message || `OTP sent to +91 ${mobileNumber}`,
+                    type: "success",
+                });
             } else {
-                Alert.alert("Error",responce.message || "Failed to sent otp")
+                showMessage({
+                    message: "Error",
+                    description: response.message || "Failed to send OTP",
+                    type: "danger",
+                });
             }
-         } catch (error) {
-               console.log("Send OTP error:", error);
-        let errorMsg = "OTP send karte waqt koi dikkat hui.";
+        } catch (error) {
+            let errorMsg = "OTP send karte waqt koi dikkat hui.";
+            if (error.response?.data?.message) {
+                errorMsg = error.response.data.message;
+            } else if (error.message) {
+                errorMsg = error.message;
+            }
+            showMessage({
+                message: "OTP Bhejne Mein Error",
+                description: errorMsg,
+                type: "danger",
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // const handleVerify = async () => {
+    //     if (otp.length < 6) {
+    //         showMessage({
+    //             message: "Adhura OTP",
+    //             description: "Please enter all 6 digits to continue.",
+    //             type: "warning",
+    //         });
+    //         return;
+    //     }
+    //     setIsLoading(true);
+    //     try {
+    //         const payload = {
+    //             mobile_number: mobileNumber,
+    //             otp: otp
+    //         };
+    //         const response = await apiPost("/api/v1/user/verify-otp", payload);
+    //         console.log(response,"what is response");
+    //         if (response.token) {
+    //             showMessage({
+    //                 message: "Verification Safal!",
+    //                 description: response.message || "OTP verified successfully!",
+    //                 type: "success",
+    //             });
+            
+    //                 navigation.navigate("AddChild", { mobileNumber: mobileNumber });
+    
+    //         } else {
+    //             showMessage({
+    //                 message: "Verification Asafal",
+    //                 description: response.message || "Failed to verify OTP. Please try again.",
+    //                 type: "danger",
+    //             });
+    //         }
+    //     } catch (error) {
+    //         let errorMsg = "OTP verify karte waqt koi dikkat hui.";
+    //         if (error.response?.data?.message) {
+    //             errorMsg = error.response.data.message;
+    //         } else if (error.message) {
+    //             errorMsg = error.message;
+    //         }
+    //         showMessage({
+    //             message: "Verification Mein Error",
+    //             description: errorMsg,
+    //             type: "danger",
+    //         });
+    //     } finally {
+    //         setIsLoading(false);
+    //     }
+    // };
+const handleVerify = async () => {
+    if (otp.length < 6) {
+        showMessage({
+            message: "Adhura OTP",
+            description: "Please enter all 6 digits to continue.",
+            type: "warning",
+        });
+        return;
+    }
+    setIsLoading(true);
+    try {
+        const payload = {
+            mobile_number: mobileNumber,
+            otp: otp
+        };
+        const response = await apiPost("/api/v1/user/verify-otp", payload);
+        console.log(response, "what is response");
+
+        if (response.token) {
+            try {
+                await AsyncStorage.setItem('user_token', response.token);
+                  await AsyncStorage.setItem('userId', String(response.user_id));
+                showMessage({
+                    message: "Verification Safal!",
+                    description: response.message || "OTP verified successfully!",
+                    type: "success",
+                });
+
+                navigation.navigate("AddChild", { mobileNumber: mobileNumber });
+
+            } catch (storageError) {
+                console.error("Failed to save the token to storage", storageError);
+                showMessage({
+                    message: "Session Error",
+                    description: "Could not save your session. Please try again.",
+                    type: "danger",
+                });
+            }
+        } else {
+            showMessage({
+                message: "Verification Asafal",
+                description: response.message || "Failed to verify OTP. Please try again.",
+                type: "danger",
+            });
+        }
+    } catch (error) {
+        let errorMsg = "OTP verify karte waqt koi dikkat hui.";
         if (error.response?.data?.message) {
             errorMsg = error.response.data.message;
         } else if (error.message) {
-            errorMsg = error.message; 
+            errorMsg = error.message;
         }
-
-        Alert.alert("Error", errorMsg);
-            
-         }
-    };
-
-      
-
-    const handleVerify = () => {
-        if (otp.length < 6) {
-            Alert.alert("Incomplete OTP", "Please enter all 6 digits to continue.");
-            return;
-        }
-      
-        navigation.navigate("AddChild", { mobileNumber: mobileNumber });
-    };
-
+        showMessage({
+            message: "Verification Mein Error",
+            description: errorMsg,
+            type: "danger",
+        });
+    } finally {
+        setIsLoading(false);
+    }
+};
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor={Colors.backgroundLight} />
@@ -124,8 +239,8 @@ const WelcomeScreen = ({ navigation }) => {
                         </View>
 
                         {!otpSent ? (
-                            <TouchableOpacity style={styles.button} onPress={handleSendVerificationCode}>
-                                <Text style={styles.buttonText}>Send Verification Code</Text>
+                            <TouchableOpacity style={styles.button} onPress={handleSendVerificationCode} disabled={isLoading}>
+                                {isLoading ? <ActivityIndicator color={Colors.textLight} /> : <Text style={styles.buttonText}>Send Verification Code</Text>}
                             </TouchableOpacity>
                         ) : (
                             <>
@@ -150,8 +265,8 @@ const WelcomeScreen = ({ navigation }) => {
                                     handleChange={setOtp}
                                 />
 
-                                <TouchableOpacity onPress={handleVerify} style={styles.verifyButton}>
-                                    <Text style={styles.buttonText}>Verify & Continue</Text>
+                                <TouchableOpacity onPress={handleVerify} style={styles.verifyButton} disabled={isLoading}>
+                                    {isLoading ? <ActivityIndicator color={Colors.textLight} /> : <Text style={styles.buttonText}>Verify & Continue</Text>}
                                 </TouchableOpacity>
                             </>
                         )}
