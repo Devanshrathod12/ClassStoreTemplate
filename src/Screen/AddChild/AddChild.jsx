@@ -34,6 +34,7 @@ const AddChildScreen = ({ route, navigation }) => {
     const mobileNumber = route.params?.mobileNumber || persistedMobileNumber;
 
     const [localChildren, setLocalChildren] = useState([]);
+    const [childrenStatus, setChildrenStatus] = useState([]);
     const [isDropdownVisible, setDropdownVisible] = useState(false);
     const [dropdownData, setDropdownData] = useState([]);
     const [currentChildIndex, setCurrentChildIndex] = useState(null);
@@ -45,11 +46,16 @@ const AddChildScreen = ({ route, navigation }) => {
     
     useFocusEffect(
         useCallback(() => {
-      
             const initialForms = isEditMode && persistedChildren.length > 0
                 ? persistedChildren
                 : [{ name: '', age: '', standard: '', schoolName: '' }];
             setLocalChildren(initialForms);
+
+            if (isEditMode && persistedChildren.length > 0) {
+                setChildrenStatus(persistedChildren.map(() => 'saved'));
+            } else {
+                setChildrenStatus(initialForms.map(() => 'new'));
+            }
         }, [isEditMode, persistedChildren])
     );
 
@@ -66,6 +72,7 @@ const AddChildScreen = ({ route, navigation }) => {
 
     const handleAddChild = () => {
         setLocalChildren([...localChildren, { name: '', age: '', standard: '', schoolName: '' }]);
+        setChildrenStatus([...childrenStatus, 'new']);
     };
 
     const handleRemoveChild = (index) => {
@@ -73,6 +80,10 @@ const AddChildScreen = ({ route, navigation }) => {
             const newChildren = [...localChildren];
             newChildren.splice(index, 1);
             setLocalChildren(newChildren);
+
+            const newStatus = [...childrenStatus];
+            newStatus.splice(index, 1);
+            setChildrenStatus(newStatus);
         }
     };
 
@@ -80,6 +91,12 @@ const AddChildScreen = ({ route, navigation }) => {
         const newChildren = [...localChildren];
         newChildren[index] = { ...newChildren[index], [field]: value };
         setLocalChildren(newChildren);
+
+        if (childrenStatus[index] === 'saved') {
+            const newStatus = [...childrenStatus];
+            newStatus[index] = 'editing';
+            setChildrenStatus(newStatus);
+        }
     };
 
     const openDropdown = (index, field, ref) => {
@@ -118,6 +135,8 @@ const AddChildScreen = ({ route, navigation }) => {
         } else {
             dispatch(setChildren([...persistedChildren, ...childrenToSave]));
         }
+
+        setChildrenStatus(childrenToSave.map(() => 'saved'));
 
         navigation.navigate(NavigationString.YourChildrenScreen);
     };
@@ -182,13 +201,15 @@ const AddChildScreen = ({ route, navigation }) => {
                         <Text style={styles.formSubtitle}>Add details for each child to get personalized book recommendations</Text>
 
                         {localChildren.map((child, index) => (
-                            <View key={index} style={styles.childFormSection}>
+                            <View key={index} style={[styles.childFormSection, childrenStatus[index] === 'saved' && styles.childFormSectionSaved]}>
                                 {localChildren.length > 1 && (
                                     <TouchableOpacity style={styles.removeChildButton} onPress={() => handleRemoveChild(index)}>
-                                        <MaterialCommunityIcons name="close-circle" size={scale(22)} color={Colors.danger} />
+                                        <MaterialCommunityIcons name="delete" size={scale(22)} color={Colors.danger} />
                                     </TouchableOpacity>
                                 )}
-                                <Text style={styles.childLabel}>Child {index + 1}</Text>
+                                <Text style={[styles.childLabel, childrenStatus[index] === 'saved' && styles.childLabelSaved]}>
+                                    Child {index + 1} {childrenStatus[index] === 'saved' && '(Saved)'}
+                                </Text>
 
                                 <Text style={styles.inputLabel}>Name</Text>
                                 <TextInput
@@ -197,6 +218,7 @@ const AddChildScreen = ({ route, navigation }) => {
                                     placeholderTextColor={Colors.textMuted}
                                     value={child.name}
                                     onChangeText={(text) => handleChildDataChange(index, 'name', text)}
+                                    
                                 />
 
                                 <Text style={styles.inputLabel}>Age</Text>
@@ -235,12 +257,15 @@ const AddChildScreen = ({ route, navigation }) => {
                         </TouchableOpacity>
 
                         <View style={styles.footerButtons}>
-                            <TouchableOpacity style={styles.continueButton} onPress={handleSaveAndContinue}>
-                                <Text style={styles.continueButtonText}>Continue to ClassStore</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
-                                <Text style={styles.skipButtonText}>Skip</Text>
-                            </TouchableOpacity>
+                            <View style={styles.buttonContainer}>
+                                <TouchableOpacity style={styles.continueButton} onPress={handleSaveAndContinue}>
+                                    <Text style={styles.continueButtonText}>Continue To ClassStore</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
+                                    <Text style={styles.skipButtonText}>Skip</Text>
+                                </TouchableOpacity>
+                            </View>
+                           
                         </View>
                     </View>
                     <Text style={styles.termsText}>
@@ -363,6 +388,11 @@ const styles = StyleSheet.create({
         paddingTop: verticalScale(15),
         marginBottom: verticalScale(15),
         position: 'relative',
+        padding: moderateScale(10),
+        borderRadius: moderateScale(8),
+    },
+    childFormSectionSaved: {
+        backgroundColor: '#17d6241b', 
     },
     removeChildButton: {
         position: 'absolute',
@@ -375,6 +405,9 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: Colors.textPrimary,
         marginBottom: verticalScale(10),
+    },
+    childLabelSaved: {
+        color: Colors.textSecondary,
     },
     inputLabel: {
         fontSize: fontScale(12),
@@ -431,23 +464,27 @@ const styles = StyleSheet.create({
         width: '100%',
         marginTop: verticalScale(20),
     },
+    buttonContainer: {
+        flexDirection: "row",
+        justifyContent:"space-evenly", 
+        alignItems: "center"
+    },
     continueButton: {
-        width: '100%',
         backgroundColor: Colors.primary,
         paddingVertical: verticalScale(14),
+        paddingHorizontal: scale(25),
         borderRadius: moderateScale(8),
+        alignItems: 'center',
+    },
+    skipButton: {
+        paddingVertical: verticalScale(10),
+        paddingHorizontal: scale(20),
         alignItems: 'center',
     },
     continueButtonText: {
         color: Colors.textLight,
         fontSize: fontScale(16),
         fontWeight: 'bold',
-    },
-    skipButton: {
-        width: '100%',
-        paddingVertical: verticalScale(10),
-        alignItems: 'center',
-        marginTop: verticalScale(5),
     },
     skipButtonText: {
         color: Colors.textMuted,

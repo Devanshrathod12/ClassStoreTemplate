@@ -146,11 +146,6 @@ const YourChildrenScreen = ({ navigation }) => {
                     </View>
                 </View>
 
-                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                    <MaterialCommunityIcons name="logout" size={scale(18)} color={Colors.textLight} />
-                    <Text style={styles.logoutButtonText}>Logout</Text>
-                </TouchableOpacity>
-
                 <Text style={styles.footerText}>Made with ❤️ for learners everywhere</Text>
 
             </ScrollView>
@@ -289,7 +284,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: Colors.danger,
+        backgroundColor: Colors.primary,
         paddingVertical: verticalScale(10),
         borderRadius: moderateScale(8),
         marginTop: verticalScale(12),

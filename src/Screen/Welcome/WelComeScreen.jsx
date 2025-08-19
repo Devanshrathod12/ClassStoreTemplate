@@ -12,13 +12,11 @@ import {
     ScrollView,
     Alert
 } from 'react-native';
-import { useDispatch } from 'react-redux';
-import { loginSuccess } from '../../Redux/auth/authSlice';
 import OtpInputs from 'react-native-otp-inputs';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-
+import {apiPost} from "../../api/api"
 import Colors from '../../styles/colors';
 import { scale, fontScale, verticalScale, moderateScale } from '../../styles/stylesconfig';
 
@@ -27,29 +25,46 @@ const WelcomeScreen = ({ navigation }) => {
     const [mobileNumber, setMobileNumber] = useState('');
     const [otp, setOtp] = useState("");
 
-    const dispatch = useDispatch();
 
-    const handleSendVerificationCode = () => {
+    const handleSendVerificationCode = async () => {
         if (mobileNumber.length < 10) {
             Alert.alert("Validation Error", "Please enter a valid 10-digit mobile number.");
             return;
         }
-        setOtpSent(true);
+         try {
+            const paylod = {
+                mobile_number:mobileNumber
+            }
+            const responce = await apiPost("/api/v1/user/send-otp",paylod)
+            console.log(responce,"sotp")
+            if (responce.otp_sent) {
+                setOtpSent(true)
+                Alert.alert("Success",responce.message || `otp sent +91 ${mobileNumber}`)
+            } else {
+                Alert.alert("Error",responce.message || "Failed to sent otp")
+            }
+         } catch (error) {
+               console.log("Send OTP error:", error);
+        let errorMsg = "OTP send karte waqt koi dikkat hui.";
+        if (error.response?.data?.message) {
+            errorMsg = error.response.data.message;
+        } else if (error.message) {
+            errorMsg = error.message; 
+        }
+
+        Alert.alert("Error", errorMsg);
+            
+         }
     };
+
+      
 
     const handleVerify = () => {
         if (otp.length < 6) {
             Alert.alert("Incomplete OTP", "Please enter all 6 digits to continue.");
             return;
         }
-
-        const customToken = `custom_token_${Date.now()}_${mobileNumber}`;
-
-        dispatch(loginSuccess({
-            user: { mobileNumber },
-            token: customToken
-        }));
-
+      
         navigation.navigate("AddChild", { mobileNumber: mobileNumber });
     };
 
