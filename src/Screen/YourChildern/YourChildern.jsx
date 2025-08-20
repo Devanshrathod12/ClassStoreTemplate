@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
     View,
     Text,
@@ -95,6 +95,33 @@ const YourChildrenScreen = ({ navigation }) => {
             fetchChildren();
         }, [])
     );
+
+
+
+// useEffect(() => {
+//     const fetchPublishers = async () => {
+//         try {
+//             const response = await apiGet("/api/v1/book");
+//             if (response && Array.isArray(response)) {
+//                 console.log("Publisher book:", response);
+//             } else {
+//                 console.log("Empty or invalid publisher list:", response);
+//             }
+//         } catch (error) {
+//             console.error("Publisher list fetch karne mein error:", error);
+//         }
+//     };
+
+//     fetchPublishers();
+// }, []);  
+
+
+// ye data get kr ke cahck krne ke liye kiya hai 
+
+
+
+
+
     
     const handleLogout = () => {
         dispatch(logout());

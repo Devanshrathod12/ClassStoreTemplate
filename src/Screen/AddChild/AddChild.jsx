@@ -53,7 +53,7 @@ const AddChildScreen = ({ route, navigation }) => {
   const [schoolOptionsFromApi, setSchoolOptionsFromApi] = useState([]);
   const [classOptionsFromApi, setClassOptionsFromApi] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [userId, setUserId] = useState(null); // User ID ke liye state
+  const [userId, setUserId] = useState(null); 
 
   const classDropdownRefs = useRef([]);
   const schoolDropdownRefs = useRef([]);
@@ -235,7 +235,7 @@ const AddChildScreen = ({ route, navigation }) => {
       await Promise.all(createChildrenPromises);
 
       Alert.alert('Safal!', 'Bachho ki jaankari save ho gayi hai.');
-      navigation.navigate(NavigationString.YourChildrenScreen);
+      navigation.navigate(NavigationString.YourChildrenScreen,{mobileNumber:mobileNumber});
     } catch (error) {
       console.error(
         'Bachho ko save karne mein error:',
@@ -251,7 +251,7 @@ const AddChildScreen = ({ route, navigation }) => {
   };
 
   const handleSkip = () => {
-    navigation.navigate(NavigationString.YourChildrenScreen);
+    navigation.navigate(NavigationString.YourChildrenScreen,{mobileNumber:mobileNumber});
   };
 
   const DropdownModal = () => (
