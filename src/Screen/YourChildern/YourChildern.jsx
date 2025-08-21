@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View,
     Text,
@@ -8,12 +8,10 @@ import {
     ScrollView,
     TouchableOpacity,
     ActivityIndicator,
-    Alert
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
 import { useFocusEffect } from '@react-navigation/native';
-import { logout } from '../../Redux/auth/authSlice';
-import { resetChildren } from '../../Redux/childSlice/childSlice';
+import { showMessage } from 'react-native-flash-message';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Colors from '../../styles/colors';
@@ -64,69 +62,58 @@ const EmptyStateCard = ({ onPress }) => (
     </View>
 );
 
-const YourChildrenScreen = ({ navigation }) => {
-    const dispatch = useDispatch();
-    const { user } = useSelector((state) => state.auth);
-    const mobileNumber = user?.mobileNumber || '';
-
+const YourChildrenScreen = ({ route, navigation }) => {
     const [children, setChildren] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [mobileNumber, setMobileNumber] = useState('');
+    const newlyAddedChildren = route.params?.newlyAddedChildren;
 
     useFocusEffect(
         useCallback(() => {
-            const fetchChildren = async () => {
+            const fetchData = async () => {
                 setIsLoading(true);
                 try {
-                    const response = await apiGet("/api/v1/children");
-                    if (response && Array.isArray(response)) {
-                        setChildren(response);
+                    const userId = await AsyncStorage.getItem('userId');
+                    const storedMobileNumber = await AsyncStorage.getItem('mobile_number');
+                    if (storedMobileNumber) {
+                        setMobileNumber(storedMobileNumber);
+                    }
+                    if (userId) {
+                        const storageKey = `children_extra_data_${userId}`;
+                        const extraDataString = await AsyncStorage.getItem(storageKey);
+                        const extraData = extraDataString ? JSON.parse(extraDataString) : {};
+
+                        const response = await apiGet(`/api/v1/children/user/${userId}`);
+                        if (response && Array.isArray(response)) {
+                            const enrichedChildren = response.map(apiChild => {
+                                const persistentData = extraData[apiChild.name] || {};
+                                const navParamData = newlyAddedChildren?.find(p => p.name === apiChild.name) || {};
+                                
+                                return {
+                                    ...apiChild,
+                                    school_name: apiChild.school_name || navParamData.school_name || persistentData.school_name,
+                                    class_name: apiChild.class_name || navParamData.class_name || persistentData.class_name,
+                                };
+                            });
+                            setChildren(enrichedChildren);
+                        } else {
+                            setChildren([]);
+                        }
                     } else {
+                        console.log("User ID not found in AsyncStorage.");
                         setChildren([]);
                     }
                 } catch (error) {
-                    console.error("Bachho ki list fetch karne mein error:", error);
+                    console.error("Error fetching children list:", error);
                     setChildren([]);
-                    Alert.alert("Error", "Could not fetch children data.");
+                    showMessage({ message: "Fetch Error", description: "Could not retrieve children's data.", type: "danger" });
                 } finally {
                     setIsLoading(false);
                 }
             };
-
-            fetchChildren();
-        }, [])
+            fetchData();
+        }, [newlyAddedChildren])
     );
-
-
-
-// useEffect(() => {
-//     const fetchPublishers = async () => {
-//         try {
-//             const response = await apiGet("/api/v1/book");
-//             if (response && Array.isArray(response)) {
-//                 console.log("Publisher book:", response);
-//             } else {
-//                 console.log("Empty or invalid publisher list:", response);
-//             }
-//         } catch (error) {
-//             console.error("Publisher list fetch karne mein error:", error);
-//         }
-//     };
-
-//     fetchPublishers();
-// }, []);  
-
-
-// ye data get kr ke cahck krne ke liye kiya hai 
-
-
-
-
-
-    
-    const handleLogout = () => {
-        dispatch(logout());
-        dispatch(resetChildren());
-    };
 
     const renderChildrenContent = () => {
         if (isLoading) {
@@ -136,7 +123,6 @@ const YourChildrenScreen = ({ navigation }) => {
                 </View>
             );
         }
-
         if (children.length > 0) {
             return (
                 <ScrollView
@@ -155,7 +141,6 @@ const YourChildrenScreen = ({ navigation }) => {
                 </ScrollView>
             );
         }
-
         return <EmptyStateCard onPress={() => navigation.navigate(NavigationString.AddChild)} />;
     };
 
@@ -178,7 +163,6 @@ const YourChildrenScreen = ({ navigation }) => {
                         <Text style={styles.welcomeNumber}>+91 {mobileNumber}</Text>
                     </View>
                 </View>
-
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Your Children</Text>
@@ -194,7 +178,6 @@ const YourChildrenScreen = ({ navigation }) => {
                     </View>
                     {renderChildrenContent()}
                 </View>
-
                 <View style={styles.statsRow}>
                     <View style={styles.statBox}>
                         <MaterialCommunityIcons name="book-open-page-variant-outline" size={scale(22)} color={Colors.primary} />
@@ -207,7 +190,6 @@ const YourChildrenScreen = ({ navigation }) => {
                         <Text style={styles.statLabel}>Progress</Text>
                     </View>
                 </View>
-                
                 <View style={styles.section}>
                     <View style={styles.exploreCard}>
                         <Text style={styles.exploreTitle}>Explore ClassStore</Text>

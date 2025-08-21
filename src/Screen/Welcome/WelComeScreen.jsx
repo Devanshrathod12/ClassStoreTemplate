@@ -145,6 +145,7 @@ const WelcomeScreen = ({ navigation, onLoginSuccess }) => {
         try {
           await AsyncStorage.setItem('user_token', response.token);
           await AsyncStorage.setItem('userId', String(response.user_id));
+          await AsyncStorage.setItem('mobile_number', String(response.mobile_number));
           showMessage({
             message: 'Verification Safal!',
             description: response.message || 'OTP verified successfully!',

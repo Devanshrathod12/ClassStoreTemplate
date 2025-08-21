@@ -71,11 +71,11 @@ const Route = () => {
   return (
     <NavigationContainer>
       <Stack.Navigator
-        screenOptions={{
-          gestureEnabled: true,
-          gestureDirection: 'horizontal',
-          cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
-        }}
+        // screenOptions={{
+        //   gestureEnabled: true,
+        //   gestureDirection: 'horizontal',
+        //   cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+        // }}
       >
         {MainScreen(Stack, isTokenValid, handleLoginSuccess,handleLogout)}
       </Stack.Navigator>

@@ -12,15 +12,13 @@ import {
   ScrollView,
   Modal,
   FlatList,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
-import { useSelector } from 'react-redux';
-// SAHI IMPORT: useFocusEffect yahan se aata hai
 import { useFocusEffect } from '@react-navigation/native';
+import { showMessage } from 'react-native-flash-message';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // AsyncStorage import
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../../styles/colors';
 import {
   scale,
@@ -29,68 +27,49 @@ import {
   moderateScale,
 } from '../../styles/stylesconfig';
 import NavigationString from '../../Navigation/NavigationString';
-import { apiGet, apiPost } from '../../api/api'; // apiPost import
+import { apiGet, apiPost } from '../../api/api';
 
-const AddChildScreen = ({ route, navigation ,onLogout}) => {
-  // Redux se ab sirf mobile number le rahe hain UI ke liye
-  const persistedMobileNumber = useSelector(
-    state => state.auth.user?.mobileNumber,
-  );
-
-  const isEditMode = route.params?.editMode || false;
-  const mobileNumber = route.params?.mobileNumber || persistedMobileNumber;
-
+const AddChildScreen = ({ route, navigation, onLogout }) => {
   const [localChildren, setLocalChildren] = useState([]);
   const [isDropdownVisible, setDropdownVisible] = useState(false);
   const [dropdownData, setDropdownData] = useState([]);
   const [currentChildIndex, setCurrentChildIndex] = useState(null);
   const [currentField, setCurrentField] = useState(null);
-  const [dropdownPosition, setDropdownPosition] = useState({
-    top: 0,
-    left: 0,
-    width: 0,
-  });
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   const [schoolOptionsFromApi, setSchoolOptionsFromApi] = useState([]);
   const [classOptionsFromApi, setClassOptionsFromApi] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [userId, setUserId] = useState(null); 
+  const [userId, setUserId] = useState(null);
+  const [mobileNumber, setMobileNumber] = useState('');
 
   const classDropdownRefs = useRef([]);
   const schoolDropdownRefs = useRef([]);
 
   useFocusEffect(
     useCallback(() => {
-      const initialForms = [
-        {
-          name: '',
-          dob: '',
-          schoolName: '',
-          schoolId: '',
-          standard: '',
-          classId: '',
-        },
-      ];
+      const initialForms = [{ name: '', dob: '', schoolName: '', schoolId: '', standard: '', classId: '' }];
       setLocalChildren(initialForms);
     }, []),
   );
 
   useEffect(() => {
-    // Function to get User ID from AsyncStorage
-    const getUserIdFromStorage = async () => {
+    const getAsyncData = async () => {
       try {
         const storedUserId = await AsyncStorage.getItem('userId');
-        if (storedUserId !== null) {
+        const storedMobileNumber = await AsyncStorage.getItem('mobile_number');
+        if (storedUserId) {
           setUserId(storedUserId);
-          console.log('AsyncStorage se User ID mili:', storedUserId);
         } else {
-          Alert.alert('Session Error', 'User not found. Please login again.');
+          showMessage({ message: "Session Error", description: "User not found. Please log in again.", type: "danger" });
+        }
+        if (storedMobileNumber) {
+          setMobileNumber(storedMobileNumber);
         }
       } catch (e) {
-        console.error('AsyncStorage se User ID nikalne mein error:', e);
+        console.error('Failed to fetch data from AsyncStorage:', e);
       }
     };
-
-    getUserIdFromStorage();
+    getAsyncData();
     GetSchoolData();
   }, []);
 
@@ -123,17 +102,7 @@ const AddChildScreen = ({ route, navigation ,onLogout}) => {
   };
 
   const handleAddChild = () => {
-    setLocalChildren([
-      ...localChildren,
-      {
-        name: '',
-        dob: '',
-        schoolName: '',
-        schoolId: '',
-        standard: '',
-        classId: '',
-      },
-    ]);
+    setLocalChildren([...localChildren, { name: '', dob: '', schoolName: '', schoolId: '', standard: '', classId: '' }]);
   };
 
   const handleRemoveChild = index => {
@@ -156,9 +125,7 @@ const AddChildScreen = ({ route, navigation ,onLogout}) => {
       setDropdownPosition({ top: py + height, left: px, width });
       setCurrentChildIndex(index);
       setCurrentField(field);
-      setDropdownData(
-        field === 'schoolName' ? schoolOptionsFromApi : classOptionsFromApi,
-      );
+      setDropdownData(field === 'schoolName' ? schoolOptionsFromApi : classOptionsFromApi);
       setDropdownVisible(true);
     });
   };
@@ -166,125 +133,102 @@ const AddChildScreen = ({ route, navigation ,onLogout}) => {
   const handleSelectOption = option => {
     const newChildren = [...localChildren];
     const childIndex = currentChildIndex;
-
     if (currentField === 'schoolName') {
-      const isSameSchool =
-        newChildren[childIndex].schoolId === option.school_id;
+      const isSameSchool = newChildren[childIndex].schoolId === option.school_id;
       if (!isSameSchool) {
         newChildren[childIndex] = {
           ...newChildren[childIndex],
           schoolName: option.school_name,
           schoolId: option.school_id,
-          standard: '', // Class ko reset karo
-          classId: '', // Class ID ko bhi reset karo
+          standard: '',
+          classId: '',
         };
         setLocalChildren(newChildren);
         GetClassData(option.school_id);
       }
     } else if (currentField === 'standard') {
-      newChildren[childIndex].standard = option.class_number; // Ye UI mein dikhega
-      newChildren[childIndex].classId = option.class_id; // Ye API ke liye save hoga
+      newChildren[childIndex].standard = option.class_number;
+      newChildren[childIndex].classId = option.class_id;
       setLocalChildren(newChildren);
     }
-
     setDropdownVisible(false);
   };
 
   const handleSaveAndContinue = async () => {
-    const childrenToSave = localChildren.filter(
-      child => child.name && child.dob && child.classId && child.schoolId,
-    );
-
-    if (
-      localChildren.some(c => c.name || c.dob || c.standard || c.schoolName) &&
-      childrenToSave.length !== localChildren.length
-    ) {
-      Alert.alert(
-        'Adhuri Jaankari',
-        'Kripya sabhi bachho ke liye poori details bharein.',
-      );
+    const childrenToSave = localChildren.filter(child => child.name && child.dob && child.classId && child.schoolId);
+    if (localChildren.some(c => c.name || c.dob || c.standard || c.schoolName) && childrenToSave.length !== localChildren.length) {
+      showMessage({ message: "Incomplete Information", description: "Please fill in all details for each child.", type: "warning" });
       return;
     }
-
     if (childrenToSave.length === 0) {
       navigation.navigate(NavigationString.YourChildrenScreen);
       return;
     }
-
     if (!userId) {
-      Alert.alert(
-        'Session Error',
-        'User ID nahi mili. Kripya dobara login karein.',
-      );
+      showMessage({ message: "Session Error", description: "User ID not found. Please log in again.", type: "danger" });
       return;
     }
-
     setIsLoading(true);
     try {
       const createChildrenPromises = childrenToSave.map(child => {
         const payload = {
           name: child.name,
           age: 10,
-          user_id: parseInt(userId), 
+          user_id: parseInt(userId),
           class_id: child.classId,
           school_id: child.schoolId,
         };
         return apiPost('/api/v1/children', payload);
       });
-
       await Promise.all(createChildrenPromises);
+      
+      const storageKey = `children_extra_data_${userId}`;
+      const existingDataString = await AsyncStorage.getItem(storageKey);
+      const existingData = existingDataString ? JSON.parse(existingDataString) : {};
 
-      Alert.alert('Safal!', 'Bachho ki jaankari save ho gayi hai.');
-      navigation.navigate(NavigationString.YourChildrenScreen,{mobileNumber:mobileNumber});
+      childrenToSave.forEach(child => {
+        existingData[child.name] = {
+          school_name: child.schoolName,
+          class_name: child.standard,
+        };
+      });
+
+      await AsyncStorage.setItem(storageKey, JSON.stringify(existingData));
+      
+      showMessage({ message: "Success!", description: "Children's information has been saved.", type: "success" });
+      
+      const passedChildrenData = childrenToSave.map(child => ({
+        name: child.name,
+        school_name: child.schoolName,
+        class_name: child.standard,
+      }));
+
+      navigation.navigate(NavigationString.YourChildrenScreen, {
+        newlyAddedChildren: passedChildrenData,
+      });
+
     } catch (error) {
-      console.error(
-        'Bachho ko save karne mein error:',
-        error.response?.data || error,
-      );
-      Alert.alert(
-        'Error',
-        'Jaankari save nahi ho payi. Kripya dobara koshish karein.',
-      );
+      console.error('Error saving children:', error.response?.data || error);
+      showMessage({ message: "Save Failed", description: "Could not save information. Please try again.", type: "danger" });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSkip = () => {
-    navigation.navigate(NavigationString.YourChildrenScreen,{mobileNumber:mobileNumber});
+    navigation.navigate(NavigationString.YourChildrenScreen);
   };
 
   const DropdownModal = () => (
-    <Modal
-      transparent={true}
-      visible={isDropdownVisible}
-      onRequestClose={() => setDropdownVisible(false)}
-    >
-      <TouchableOpacity
-        style={styles.modalOverlay}
-        onPress={() => setDropdownVisible(false)}
-      >
-        <View
-          style={[
-            styles.modalContent,
-            {
-              top: dropdownPosition.top,
-              left: dropdownPosition.left,
-              width: dropdownPosition.width,
-            },
-          ]}
-        >
+    <Modal transparent={true} visible={isDropdownVisible} onRequestClose={() => setDropdownVisible(false)}>
+      <TouchableOpacity style={styles.modalOverlay} onPress={() => setDropdownVisible(false)}>
+        <View style={[styles.modalContent, { top: dropdownPosition.top, left: dropdownPosition.left, width: dropdownPosition.width }]}>
           <FlatList
             data={dropdownData}
             keyExtractor={item => item.school_id || item.class_id}
             renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.modalItem}
-                onPress={() => handleSelectOption(item)}
-              >
-                <Text style={styles.modalItemText}>
-                  {item.school_name || item.class_number}
-                </Text>
+              <TouchableOpacity style={styles.modalItem} onPress={() => handleSelectOption(item)}>
+                <Text style={styles.modalItemText}>{item.school_name || item.class_number}</Text>
               </TouchableOpacity>
             )}
           />
@@ -295,194 +239,74 @@ const AddChildScreen = ({ route, navigation ,onLogout}) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar
-        barStyle="dark-content"
-        backgroundColor={Colors.backgroundLight}
-      />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-        >
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.backgroundLight} />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.headerContainer}>
             <View style={styles.logoContainer}>
-              <MaterialCommunityIcons
-                name="book-open-variant"
-                size={scale(35)}
-                color={Colors.textLight}
-              />
+              <MaterialCommunityIcons name="book-open-variant" size={scale(35)} color={Colors.textLight} />
             </View>
             <Text style={styles.title}>Almost There!</Text>
-            <Text style={styles.subtitle}>
-              Tell us about your children to personalize their learning
-            </Text>
+            <Text style={styles.subtitle}>Tell us about your children to personalize their learning</Text>
           </View>
-
           <View style={styles.loggedInContainer}>
             <View style={styles.loggedInIconCircle}>
-              <MaterialIcons
-                name="check"
-                size={scale(20)}
-                color={Colors.success}
-              />
+              <MaterialIcons name="check" size={scale(20)} color={Colors.success} />
             </View>
             <View>
               <Text style={styles.loggedInText}>Logged in as</Text>
               <Text style={styles.loggedInNumber}>+91 {mobileNumber}</Text>
             </View>
           </View>
-
           <View style={styles.formContainer}>
             <View style={styles.formHeader}>
-              <MaterialIcons
-                name="school"
-                size={scale(20)}
-                color={Colors.primary}
-              />
+              <MaterialIcons name="school" size={scale(20)} color={Colors.primary} />
               <Text style={styles.formTitle}>Children Information</Text>
             </View>
-            <Text style={styles.formSubtitle}>
-              Add details for each child to get personalized book
-              recommendations
-            </Text>
-
+            <Text style={styles.formSubtitle}>Add details for each child to get personalized book recommendations</Text>
             {localChildren.map((child, index) => (
               <View key={index} style={styles.childFormSection}>
                 {localChildren.length > 1 && (
-                  <TouchableOpacity
-                    style={styles.removeChildButton}
-                    onPress={() => handleRemoveChild(index)}
-                  >
-                    <MaterialCommunityIcons
-                      name="delete"
-                      size={scale(22)}
-                      color={Colors.danger}
-                    />
+                  <TouchableOpacity style={styles.removeChildButton} onPress={() => handleRemoveChild(index)}>
+                    <MaterialCommunityIcons name="delete" size={scale(22)} color={Colors.danger} />
                   </TouchableOpacity>
                 )}
                 <Text style={styles.childLabel}>Child {index + 1}</Text>
                 <Text style={styles.inputLabel}>Name</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter child's name"
-                  placeholderTextColor={Colors.textMuted}
-                  value={child.name}
-                  onChangeText={text =>
-                    handleTextInputChange(index, 'name', text)
-                  }
-                />
+                <TextInput style={styles.input} placeholder="Enter child's name" placeholderTextColor={Colors.textMuted} value={child.name} onChangeText={text => handleTextInputChange(index, 'name', text)} />
                 <Text style={styles.inputLabel}>Date of Birth</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="DD/MM/YYYY"
-                  placeholderTextColor={Colors.textMuted}
-                  value={child.dob}
-                  onChangeText={text =>
-                    handleTextInputChange(index, 'dob', text)
-                  }
-                />
+                <TextInput style={styles.input} placeholder="DD/MM/YYYY" placeholderTextColor={Colors.textMuted} value={child.dob} onChangeText={text => handleTextInputChange(index, 'dob', text)} />
                 <Text style={styles.inputLabel}>School Name</Text>
-                <TouchableOpacity
-                  ref={el => (schoolDropdownRefs.current[index] = el)}
-                  style={styles.dropdown}
-                  onPress={() =>
-                    openDropdown(
-                      index,
-                      'schoolName',
-                      schoolDropdownRefs.current[index],
-                    )
-                  }
-                >
-                  <Text
-                    style={
-                      child.schoolName
-                        ? styles.dropdownTextSelected
-                        : styles.dropdownText
-                    }
-                  >
-                    {child.schoolName || 'Select school'}
-                  </Text>
-                  <MaterialIcons
-                    name="keyboard-arrow-down"
-                    size={scale(20)}
-                    color={Colors.textMuted}
-                  />
+                <TouchableOpacity ref={el => (schoolDropdownRefs.current[index] = el)} style={styles.dropdown} onPress={() => openDropdown(index, 'schoolName', schoolDropdownRefs.current[index])}>
+                  <Text style={child.schoolName ? styles.dropdownTextSelected : styles.dropdownText}>{child.schoolName || 'Select school'}</Text>
+                  <MaterialIcons name="keyboard-arrow-down" size={scale(20)} color={Colors.textMuted} />
                 </TouchableOpacity>
                 <Text style={styles.inputLabel}>Class</Text>
-                <TouchableOpacity
-                  ref={el => (classDropdownRefs.current[index] = el)}
-                  style={[
-                    styles.dropdown,
-                    !child.schoolId && styles.dropdownDisabled,
-                  ]}
-                  onPress={() =>
-                    openDropdown(
-                      index,
-                      'standard',
-                      classDropdownRefs.current[index],
-                    )
-                  }
-                  disabled={!child.schoolId}
-                >
-                  <Text
-                    style={
-                      child.standard
-                        ? styles.dropdownTextSelected
-                        : styles.dropdownText
-                    }
-                  >
-                    {child.standard || 'Select class'}
-                  </Text>
-                  <MaterialIcons
-                    name="keyboard-arrow-down"
-                    size={scale(20)}
-                    color={Colors.textMuted}
-                  />
+                <TouchableOpacity ref={el => (classDropdownRefs.current[index] = el)} style={[styles.dropdown, !child.schoolId && styles.dropdownDisabled]} onPress={() => openDropdown(index, 'standard', classDropdownRefs.current[index])} disabled={!child.schoolId}>
+                  <Text style={child.standard ? styles.dropdownTextSelected : styles.dropdownText}>{child.standard || 'Select class'}</Text>
+                  <MaterialIcons name="keyboard-arrow-down" size={scale(20)} color={Colors.textMuted} />
                 </TouchableOpacity>
               </View>
             ))}
-            <TouchableOpacity
-              style={styles.addChildButton}
-              onPress={handleAddChild}
-            >
-              <MaterialIcons
-                name="add"
-                size={scale(18)}
-                color={Colors.primary}
-              />
+            <TouchableOpacity style={styles.addChildButton} onPress={handleAddChild}>
+              <MaterialIcons name="add" size={scale(18)} color={Colors.primary} />
               <Text style={styles.addChildText}>Add Another Child</Text>
             </TouchableOpacity>
             <View style={styles.footerButtons}>
               <View style={styles.buttonContainer}>
-                <TouchableOpacity
-                  style={styles.continueButton}
-                  onPress={handleSaveAndContinue}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <ActivityIndicator color={Colors.textLight} />
-                  ) : (
-                    <Text style={styles.continueButtonText}>Continue</Text>
-                  )}
+                <TouchableOpacity style={styles.continueButton} onPress={handleSaveAndContinue} disabled={isLoading}>
+                  {isLoading ? <ActivityIndicator color={Colors.textLight} /> : <Text style={styles.continueButtonText}>Continue</Text>}
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.skipButton}
-                  onPress={handleSkip}
-                >
+                <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
                   <Text style={styles.skipButtonText}>Skip</Text>
                 </TouchableOpacity>
-                       <TouchableOpacity onPress={onLogout}>
-                <Text>Log Out</Text>
-            </TouchableOpacity>
+                <TouchableOpacity onPress={onLogout}>
+                  <Text>Log Out</Text>
+                </TouchableOpacity>
               </View>
             </View>
           </View>
-          <Text style={styles.termsText}>
-            By continuing, you agree to our Terms of Service and Privacy Policy.
-          </Text>
+          <Text style={styles.termsText}>By continuing, you agree to our Terms of Service and Privacy Policy.</Text>
         </ScrollView>
         <DropdownModal />
       </KeyboardAvoidingView>
@@ -490,7 +314,6 @@ const AddChildScreen = ({ route, navigation ,onLogout}) => {
   );
 };
 
-// Styles (No Changes)
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.backgroundLight },
   content: {
