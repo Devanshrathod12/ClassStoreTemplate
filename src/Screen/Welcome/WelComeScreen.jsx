@@ -199,7 +199,7 @@ const WelcomeScreen = ({ navigation, onLoginSuccess }) => {
         <ScrollView
           ref={scrollViewRef}
           contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
         >
           <View style={styles.headerContainer}>
             <View style={styles.logoContainer}>
@@ -304,7 +304,7 @@ const WelcomeScreen = ({ navigation, onLoginSuccess }) => {
                   </Text>
                 </TouchableOpacity>
 
-                <Text style={styles.inputLabel}>Enter Verification Code</Text>
+                <Text style={styles.inputLabelotp}>Enter Verification Code</Text>
                 <OtpInputs
                   autofillFromClipboard={false}
                   numberOfInputs={6}
@@ -443,6 +443,12 @@ const styles = StyleSheet.create({
     fontSize: fontScale(14),
     color: Colors.textSecondary,
     fontWeight: '500',
+  },
+  inputLabelotp: {
+    fontSize: fontScale(14),
+    color: Colors.textSecondary,
+    fontWeight: '500',
+    marginBottom:verticalScale(12)
   },
   editButtonText: {
     fontSize: fontScale(13),
