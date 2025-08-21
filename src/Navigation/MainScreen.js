@@ -1,18 +1,28 @@
+import React from 'react';
 import NavigationString from './NavigationString';
 import * as Screen from '../Screen';
-export default function (Stack) {
+
+export default function (Stack, isTokenValid, onLoginSuccess,onLogout) {
+
+  if (!isTokenValid) {
+    return (
+      <Stack.Screen
+        name={NavigationString.WelComeScreen}
+        options={{ headerShown: false }}
+      >
+        {(props) => <Screen.WelComeScreen {...props} onLoginSuccess={onLoginSuccess} />}
+      </Stack.Screen>
+    );
+  }
+
   return (
     <>
       <Stack.Screen
-        name={NavigationString.WelComeScreen}
-        component={Screen.WelComeScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
         name={NavigationString.AddChild}
-        component={Screen.AddChild}
         options={{ headerShown: false }}
-      />
+      >
+        {(props) => <Screen.AddChild {...props} onLogout={onLogout} />}
+      </Stack.Screen>
       <Stack.Screen
         name={NavigationString.YourChildrenScreen}
         component={Screen.YourChildern}

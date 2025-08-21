@@ -1,5 +1,5 @@
-import { StyleSheet, Text, View, ActivityIndicator } from 'react-native';
-import React, { useState, useEffect } from 'react';
+import { StyleSheet, View, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   CardStyleInterpolators,
   createStackNavigator,
@@ -8,35 +8,62 @@ import { NavigationContainer } from '@react-navigation/native';
 import MainScreen from './MainScreen';
 import NavigationString from './NavigationString';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { apiPost } from '../api/api';
 
 const Stack = createStackNavigator();
 
 const Route = () => {
   const [isLoading, setIsLoading] = useState(true);
-  const [userToken, setUserToken] = useState(null);
+  const [isTokenValid, setIsTokenValid] = useState(false);
 
-  // Check for token on app load
+  const handleLoginSuccess = useCallback(() => {
+    setIsTokenValid(true);
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+        await AsyncStorage.removeItem('user_token');
+        await AsyncStorage.removeItem('userId');
+        setIsTokenValid(false);
+    } catch (error) {
+        console.error('Failed to log out', error);
+    }
+};
+
   useEffect(() => {
-    const checkToken = async () => {
+    const checkTokenValidity = async () => {
+      let token;
       try {
-        // Check if token exists in AsyncStorage
-        const token = await AsyncStorage.getItem('user_token');
-        setUserToken(token);
+        token = await AsyncStorage.getItem('user_token');
+        
+        if (!token) {
+          setIsTokenValid(false);
+          setIsLoading(false);
+          return;
+        }
+
+        await apiPost('/api/v1/auth/verify', { token: token });
+        setIsTokenValid(true);
+
       } catch (error) {
-        console.error('Error checking authentication token:', error);
+        console.log('Token is invalid or validation failed, clearing storage');
+        if (token) {
+            await AsyncStorage.removeItem('user_token');
+            await AsyncStorage.removeItem('userId');
+        }
+        setIsTokenValid(false);
       } finally {
         setIsLoading(false);
       }
     };
 
-    checkToken();
+    checkTokenValidity();
   }, []);
 
-  // Render loading screen while checking token
   if (isLoading) {
     return (
       <View style={styles.loaderContainer}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color="#0000ff" />
       </View>
     );
   }
@@ -49,9 +76,8 @@ const Route = () => {
           gestureDirection: 'horizontal',
           cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
         }}
-        initialRouteName={userToken ? NavigationString.AddChild : NavigationString.WelComeScreen}
       >
-        {MainScreen(Stack)}
+        {MainScreen(Stack, isTokenValid, handleLoginSuccess,handleLogout)}
       </Stack.Navigator>
     </NavigationContainer>
   );

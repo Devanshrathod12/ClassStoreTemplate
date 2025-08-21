@@ -31,7 +31,7 @@ import {
 import NavigationString from '../../Navigation/NavigationString';
 import { apiGet, apiPost } from '../../api/api'; // apiPost import
 
-const AddChildScreen = ({ route, navigation }) => {
+const AddChildScreen = ({ route, navigation ,onLogout}) => {
   // Redux se ab sirf mobile number le rahe hain UI ke liye
   const persistedMobileNumber = useSelector(
     state => state.auth.user?.mobileNumber,
@@ -474,6 +474,9 @@ const AddChildScreen = ({ route, navigation }) => {
                 >
                   <Text style={styles.skipButtonText}>Skip</Text>
                 </TouchableOpacity>
+                       <TouchableOpacity onPress={onLogout}>
+                <Text>Log Out</Text>
+            </TouchableOpacity>
               </View>
             </View>
           </View>
