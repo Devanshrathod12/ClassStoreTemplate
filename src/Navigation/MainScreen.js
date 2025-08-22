@@ -53,6 +53,11 @@ export default function (Stack, isTokenValid, onLoginSuccess,onLogout) {
         component={Screen.MyCart}
         options={{ headerShown: false }}
       />
+      <Stack.Screen
+        name={NavigationString.ShowBooks}
+        component={Screen.ShowBooks}
+        options={{ headerShown: false }}
+      />
     </>
   );
 }

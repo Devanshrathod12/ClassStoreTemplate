@@ -16,16 +16,17 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Colors from '../../styles/colors';
 import { scale, fontScale, verticalScale, moderateScale } from '../../styles/stylesconfig';
 import NavigationString from '../../Navigation/NavigationString';
-import { apiGet ,apiPost} from '../../api/api';
+import { apiGet, apiPost } from '../../api/api';
 
 const SelectPackageScreen = ({ route, navigation }) => {
     const { child } = route.params;
     const [packages, setPackages] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [AddedToCartIds,setAddedToCartIds] = useState([])
+    const [AddedToCartIds, setAddedToCartIds] = useState([]);
+
     useFocusEffect(
         useCallback(() => {
-            const fetchPackages = async () => {
+            const fetchPackagesAndBookOverviews = async () => {
                 if (!child?.classId) {
                     showMessage({
                         message: "Error",
@@ -38,13 +39,30 @@ const SelectPackageScreen = ({ route, navigation }) => {
 
                 setIsLoading(true);
                 try {
-                    const response = await apiGet(`/api/v1/bundle/class/${child.classId}`);
-                    if (response && Array.isArray(response)) {
-                        const formattedPackages = response.map(pkg => {
+                    const bundleResponse = await apiGet(`/api/v1/bundle/class/${child.classId}`);
+                    if (bundleResponse && Array.isArray(bundleResponse)) {
+                        const enhancedPackagesPromises = bundleResponse.map(async (pkg) => {
                             const price = parseFloat(pkg.price);
                             const discount = parseFloat(pkg.discount);
                             const originalPrice = price + discount;
-                            
+                            let bookOverviews = [];
+                            let totalBookCount = 0;
+
+                            try {
+                                const bundleContents = await apiGet(`/api/v1/books-bundle/bundle/${pkg.bundle_id}`);
+                                if (bundleContents && Array.isArray(bundleContents) && bundleContents.length > 0) {
+                                    totalBookCount = bundleContents.length;
+                                    const previewItems = bundleContents.slice(0, 4);
+                                    const bookDetailPromises = previewItems.map(item => apiGet(`/api/v1/book/${item.book_id}`));
+                                    const resolvedBookDetails = await Promise.all(bookDetailPromises);
+                                    bookOverviews = resolvedBookDetails
+                                        .filter(book => book)
+                                        .map(book => book.book_name);
+                                }
+                            } catch (error) {
+                                console.error(`Failed to fetch book overview for bundle ${pkg.bundle_id}:`, error);
+                            }
+
                             return {
                                 ...pkg,
                                 id: pkg.bundle_id,
@@ -52,12 +70,13 @@ const SelectPackageScreen = ({ route, navigation }) => {
                                 price: price,
                                 originalPrice: originalPrice,
                                 description: `A curated educational package for Class ${child.standard}.`,
-                                books: ['Picture Story Books (5)', 'Activity Workbooks (3)', 'Coloring Books (2)', 'Number & Alphabet Charts'],
-                                subjects: ['Pre-reading', 'Pre-Math', 'Creative Arts', 'Motor Skills'],
-                                features: ['Age-appropriate content', 'Interactive activities', 'Parent guidance included', 'Colorful illustrations']
+                                bookNames: bookOverviews,
+                                totalBooks: totalBookCount
                             };
                         });
-                        setPackages(formattedPackages);
+                        
+                        const finalPackages = await Promise.all(enhancedPackagesPromises);
+                        setPackages(finalPackages);
                     } else {
                         setPackages([]);
                     }
@@ -65,7 +84,7 @@ const SelectPackageScreen = ({ route, navigation }) => {
                     console.error("Failed to fetch packages:", error);
                     showMessage({
                         message: "API Error",
-                        description: "Could not fetch available bundles. Please try again later.",
+                        description: "Could not fetch available bundles.",
                         type: "danger",
                     });
                 } finally {
@@ -73,7 +92,7 @@ const SelectPackageScreen = ({ route, navigation }) => {
                 }
             };
 
-            fetchPackages();
+            fetchPackagesAndBookOverviews();
         }, [child])
     );
     
@@ -91,54 +110,39 @@ const SelectPackageScreen = ({ route, navigation }) => {
     }
 
     const HandleAddToCart = async (bundleId) => {
-       
-        if (!bundleId) {
-            showMessage({message:"Error",description:"bundle information is missing.",type:"danger"})
-            return;
-        }
-
-        showMessage({message:"Adding To Cart",type:"info"})
-
-         try {
-            const expiresAt  = new Date()
-            expiresAt.setDate(expiresAt.getDate() + 1)
-
+        showMessage({ message: "Adding To Cart", type: "info" });
+        try {
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + 1);
             const payload = {
-                  bundle_id: String(bundleId),
-            quantity: 1, 
-            expires_at: expiresAt.toISOString(),
-            }
-
-        console.log(JSON.stringify(payload, null, 2));
-        const response = await apiPost('/api/v1/cart', payload);
-
-        setAddedToCartIds(prevIds => [...prevIds,bundleId])
-
-
-        console.log(" Cart Response ---");
-        console.log(JSON.stringify(response, null, 2));
-        showMessage({
-            message: "Success!",
-            description: "Bundle added to your cart.",
-            type: "success",
-            icon: "success",
-        });
-
-         } catch (error) {
-              console.error("Failed to add to cart:", error.response?.data || error);
-        showMessage({
-            message: "Failed to Add",
-            description: "Could not add the bundle to your cart. Please try again.",
-            type: "danger",
-        });
-         }
-    }
+                bundle_id: String(bundleId),
+                quantity: 1,
+                expires_at: expiresAt.toISOString(),
+            };
+            await apiPost('/api/v1/cart', payload);
+            setAddedToCartIds(prevIds => [...prevIds, bundleId]);
+            showMessage({ message: "Success!", description: "Bundle added to your cart.", type: "success" });
+        } catch (error) {
+            console.error("Failed to add to cart:", error.response?.data || error);
+            showMessage({ message: "Failed to Add", description: "Could not add the bundle to your cart.", type: "danger" });
+        }
+    };
     
     const renderPackage = (pkg) => {
         const savedAmount = pkg.originalPrice - pkg.price;
-        const isAdded = AddedToCartIds.includes(pkg.id)
+        const isAdded = AddedToCartIds.includes(pkg.id);
+        
         return (
-            <View key={pkg.id} style={styles.packageCard}>
+            <TouchableOpacity
+                key={pkg.id}
+                style={styles.packageCard}
+                activeOpacity={0.9}
+                onPress={() => navigation.navigate(NavigationString.ShowBooks, { 
+                    bundleId: pkg.id,
+                    bundleName: pkg.title,
+                    child: child
+                })}
+            >
                 <View style={styles.packageHeader}>
                     <View style={styles.packageInfo}>
                         <Text style={styles.packageTitle}>{pkg.title}</Text>
@@ -155,48 +159,39 @@ const SelectPackageScreen = ({ route, navigation }) => {
                     </View>
                 </View>
 
-                {/* --- DETAILS COMMENTED OUT --- */}
-                {/* 
-                <View style={styles.detailsSection}>
-                    <Text style={styles.detailTitle}><MaterialCommunityIcons name="bookshelf" /> Books Included (Sample)</Text>
-                    {pkg.books.map((book, i) => <Text key={i} style={styles.detailItem}>- {book}</Text>)}
-                </View>
-                <View style={styles.detailsSection}>
-                    <Text style={styles.detailTitle}>Subjects Covered (Sample)</Text>
-                    <View style={styles.subjectsContainer}>
-                        {pkg.subjects.map((subject, i) => <View key={i} style={styles.subjectTag}><Text style={styles.subjectText}>{subject}</Text></View>)}
+                {pkg.bookNames && pkg.bookNames.length > 0 && (
+                    <View style={styles.detailsSection}>
+                        <Text style={styles.detailTitle}><MaterialCommunityIcons name="bookshelf" /> Books Included ({pkg.totalBooks})</Text>
+                        {pkg.bookNames.map((bookName, index) => (
+                            <Text key={index} style={styles.detailItem} numberOfLines={1}>• {bookName}</Text>
+                        ))}
+                        {pkg.totalBooks > pkg.bookNames.length && (
+                             <Text style={styles.detailItem}>• and {pkg.totalBooks - pkg.bookNames.length} more...</Text>
+                        )}
                     </View>
-                </View>
-                <View style={styles.detailsSection}>
-                    <Text style={styles.detailTitle}>Key Features (Sample)</Text>
-                    {pkg.features.map((feature, i) => <Text key={i} style={styles.featureItem}><MaterialIcons name="check" color={Colors.success} /> {feature}</Text>)}
-                </View>
-                */}
-                {/* --- END OF COMMENTED OUT DETAILS --- */}
+                )}
 
-                <View style={styles.buttonRow}>
+                {/* <View style={styles.buttonRow}>
                     <TouchableOpacity 
                         style={isAdded ? styles.addedToCartButton : styles.addToCartButton}
                         onPress={() => HandleAddToCart(pkg.id)}
                         disabled={isAdded}
                     >
                         {isAdded ? (
-                                <MaterialIcons name="check" size={scale(18)} color={Colors.success} />
+                            <MaterialIcons name="check" size={scale(18)} color={Colors.success} />
                         ) : (
-                                 <MaterialCommunityIcons name="cart-plus" size={scale(18)} color={Colors.primary} />
+                            <MaterialCommunityIcons name="cart-plus" size={scale(18)} color={Colors.primary} />
                         )}
-                       
-                        <Text style={ isAdded ? styles.addedToCartButtonText : styles.addToCartButtonText}>{isAdded ? "Added" : "Add To Cart" }</Text>
+                        <Text style={isAdded ? styles.addedToCartButtonText : styles.addToCartButtonText}>{isAdded ? "Added" : "Add To Cart"}</Text>
                     </TouchableOpacity>
-
                     <TouchableOpacity 
                         style={styles.orderButton}
                         onPress={() => navigation.navigate(NavigationString.DeliveryAddress, { child: child, pkg: pkg })}
                     >
                         <Text style={styles.orderButtonText}>Order Now</Text>
                     </TouchableOpacity>
-                </View>
-            </View>
+                </View> */}
+            </TouchableOpacity>
         );
     };
 
@@ -230,9 +225,7 @@ const SelectPackageScreen = ({ route, navigation }) => {
             </View>
             <ScrollView contentContainerStyle={styles.content}>
                 <View style={styles.childBanner}>
-                     <View style={styles.childIconCircle}>
-                        {/* <Text style={styles.childIconText}>{getInitials(child.name)}</Text> */}
-                    </View>
+                     <View style={styles.childIconCircle} />
                     <View>
                         <Text style={styles.childName}>{child.name}</Text>
                         <Text style={styles.childDetails}>{child.age} years • {child.school_name}</Text>
@@ -330,11 +323,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    childIconText: {
-        fontSize: fontScale(18),
-        fontWeight: 'bold',
-        color: Colors.primary,
-    },
     childName: {
         color: Colors.textLight,
         fontSize: fontScale(14),
@@ -358,8 +346,6 @@ const styles = StyleSheet.create({
     packageHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.borderLight,
         paddingBottom: verticalScale(10),
     },
     packageInfo: {
@@ -404,6 +390,9 @@ const styles = StyleSheet.create({
     },
     detailsSection: {
         marginTop: verticalScale(12),
+        paddingTop: verticalScale(12),
+        borderTopWidth: 1,
+        borderTopColor: Colors.borderLight,
     },
     detailTitle: {
         fontSize: fontScale(14),
@@ -416,27 +405,6 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
         marginBottom: verticalScale(4),
         marginLeft: scale(8),
-    },
-    subjectsContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-    },
-    subjectTag: {
-        backgroundColor: Colors.backgroundFaded,
-        borderRadius: moderateScale(6),
-        paddingHorizontal: scale(10),
-        paddingVertical: verticalScale(5),
-        marginRight: scale(8),
-        marginBottom: scale(8),
-    },
-    subjectText: {
-        fontSize: fontScale(12),
-        color: Colors.textSecondary,
-    },
-    featureItem: {
-        fontSize: fontScale(13),
-        color: Colors.textSecondary,
-        marginBottom: verticalScale(5),
     },
     buttonRow: {
         flexDirection: 'row',
@@ -480,7 +448,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#E8F5E9', // Halka green background
+        backgroundColor: '#E8F5E9',
         borderWidth: 1,
         borderColor: Colors.success,
         paddingVertical: verticalScale(12),

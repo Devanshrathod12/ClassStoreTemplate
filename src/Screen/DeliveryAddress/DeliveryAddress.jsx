@@ -8,25 +8,30 @@ import {
     ScrollView,
     TouchableOpacity,
     TextInput,
-    Alert
+    Alert,
+    ActivityIndicator
 } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-
+import { showMessage } from 'react-native-flash-message';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../../styles/colors';
 import { scale, fontScale, verticalScale, moderateScale } from '../../styles/stylesconfig';
 import NavigationString from '../../Navigation/NavigationString';
+import { apiPost } from '../../api/api';
 
 const DeliveryAddress = ({ route, navigation }) => {
     const { child, pkg } = route.params;
+    const [isLoading, setIsLoading] = useState(false);
     const [address, setAddress] = useState({
         fullName: child.name,
-        phone: '1234567890',
-        addressLine: '',
-        landmark: '',
+        phone: '',
+        addressLine1: '',
+        addressLine2: '',
         pincode: '',
         city: '',
-        state: ''
+        state: '',
+        country: 'India'
     });
 
     const deliveryFee = 49;
@@ -38,17 +43,60 @@ const DeliveryAddress = ({ route, navigation }) => {
         return name.charAt(0).toUpperCase();
     };
 
-    const handleContinueToPayment = () => {
-        if (!address.fullName || !address.phone || !address.addressLine || !address.pincode || !address.city || !address.state) {
+    const handleContinueToPayment = async () => {
+        if (!address.fullName || !address.phone || !address.addressLine1 || !address.pincode || !address.city || !address.state || !address.country) {
             Alert.alert("Incomplete Address", "Please fill all the required address details to continue.");
             return;
         }
         
-        navigation.navigate(NavigationString.PaymentDetailes, {
-            child: child,
-            pkg: pkg,
-            address: address
-        });
+        setIsLoading(true);
+
+        try {
+            const userId = await AsyncStorage.getItem('userId');
+            if (!userId) {
+                showMessage({ message: "Authentication Error", description: "Could not find user ID. Please log in again.", type: "danger" });
+                setIsLoading(false);
+                return;
+            }
+
+            const payload = {
+                user_id: parseInt(userId, 10),
+                address_line1: address.addressLine1,
+                address_line2: address.addressLine2 || '',
+                city: address.city,
+                state: address.state,
+                pincode: address.pincode,
+                country: address.country,
+                address_type: "Shipping"
+            };
+
+            console.log("Submitting Address Payload:", JSON.stringify(payload, null, 2));
+
+            const response = await apiPost('/api/v1/address', payload);
+            console.log("Address Saved Response:", JSON.stringify(response, null, 2));
+
+            showMessage({
+                message: "Address Saved",
+                description: "Your delivery address has been saved.",
+                type: "success",
+            });
+
+            navigation.navigate(NavigationString.PaymentDetailes, {
+                child: child,
+                pkg: pkg,
+                address: { ...address, address_id: response.address_id },
+            });
+
+        } catch (error) {
+            console.error("Failed to save address:", error.response?.data || error);
+            showMessage({
+                message: "Error",
+                description: "Could not save your address. Please try again.",
+                type: "danger",
+            });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -65,12 +113,10 @@ const DeliveryAddress = ({ route, navigation }) => {
                 <View style={{width: scale(24)}} />
             </View>
 
-            <ScrollView contentContainerStyle={styles.content}>
+            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
                 <View style={styles.card}>
                     <View style={styles.sectionHeader}>
-                        {/* <MaterialCommunityIcons name="receipt-text-check-outline" size={scale(18)} color={Colors.primary} /> */}
                         <MaterialCommunityIcons name="file-document-outline" size={scale(18)} color={Colors.primary} />
-
                         <Text style={styles.sectionTitle}>Order Summary</Text>
                     </View>
                     <View style={styles.itemRow}>
@@ -79,24 +125,24 @@ const DeliveryAddress = ({ route, navigation }) => {
                                 <Text style={styles.itemAvatarText}>{getInitials(child.name)}</Text>
                             </View>
                             <View>
-                                <Text style={styles.itemName}>{pkg.title}</Text>
+                                <Text style={styles.itemName} numberOfLines={1}>{pkg.title}</Text>
                                 <Text style={styles.itemFor}>For {child.name} • {child.standard} standard</Text>
                             </View>
                         </View>
-                        <Text style={styles.itemPrice}>₹{pkg.price}</Text>
+                        <Text style={styles.itemPrice}>₹{subtotal.toFixed(2)}</Text>
                     </View>
                     <View style={styles.priceBreakdown}>
                         <View style={styles.priceRow}>
                             <Text style={styles.priceLabel}>Subtotal</Text>
-                            <Text style={styles.priceValue}>₹{subtotal}</Text>
+                            <Text style={styles.priceValue}>₹{subtotal.toFixed(2)}</Text>
                         </View>
                         <View style={styles.priceRow}>
                             <Text style={styles.priceLabel}>Delivery</Text>
-                            <Text style={styles.priceValue}>₹{deliveryFee}</Text>
+                            <Text style={styles.priceValue}>₹{deliveryFee.toFixed(2)}</Text>
                         </View>
                          <View style={[styles.priceRow, styles.totalRow]}>
                             <Text style={styles.totalLabel}>Total</Text>
-                            <Text style={styles.totalValue}>₹{total}</Text>
+                            <Text style={styles.totalValue}>₹{total.toFixed(2)}</Text>
                         </View>
                     </View>
                 </View>
@@ -104,9 +150,9 @@ const DeliveryAddress = ({ route, navigation }) => {
                 <View style={styles.card}>
                      <View style={styles.sectionHeader}>
                         <MaterialIcons name="location-on" size={scale(18)} color={Colors.primary} />
-                        <Text style={styles.sectionTitle}>Delivery Address</Text>
+                        <Text style={styles.sectionTitle}>Shipping Address</Text>
                     </View>
-                    <Text style={styles.sectionSubtitle}>Where should we deliver your books?</Text>
+                    <Text style={styles.sectionSubtitle}>Where should we deliver your order?</Text>
                     
                     <View style={styles.inputRow}>
                         <View style={styles.inputGroup}>
@@ -115,38 +161,48 @@ const DeliveryAddress = ({ route, navigation }) => {
                         </View>
                          <View style={styles.inputGroup}>
                             <Text style={styles.inputLabel}>Phone Number</Text>
-                            <TextInput style={styles.input} value={address.phone} keyboardType="phone-pad" onChangeText={t => setAddress({...address, phone: t})} />
+                            <TextInput style={styles.input} value={address.phone} keyboardType="phone-pad" onChangeText={t => setAddress({...address, phone: t})} maxLength={10} />
                         </View>
                     </View>
                      <View style={styles.inputGroupFull}>
-                        <Text style={styles.inputLabel}>Address</Text>
-                        <TextInput style={styles.input} placeholder="House/Flat No., Building, Street, Area" placeholderTextColor={Colors.textMuted} onChangeText={t => setAddress({...address, addressLine: t})} />
+                        <Text style={styles.inputLabel}>Address (House No, Building, Street)</Text>
+                        <TextInput style={styles.input} placeholder="e.g. 123, Sunshine Apartments" placeholderTextColor={Colors.textMuted} onChangeText={t => setAddress({...address, addressLine1: t})} />
                     </View>
                      <View style={styles.inputGroupFull}>
-                        <Text style={styles.inputLabel}>Landmark (Optional)</Text>
-                        <TextInput style={styles.input} placeholder="Nearby landmark" placeholderTextColor={Colors.textMuted} onChangeText={t => setAddress({...address, landmark: t})} />
+                        <Text style={styles.inputLabel}>Landmark</Text>
+                        <TextInput style={styles.input} placeholder="e.g. Near City Park" placeholderTextColor={Colors.textMuted} onChangeText={t => setAddress({...address, addressLine2: t})} />
                     </View>
 
                      <View style={styles.inputRow}>
                         <View style={styles.inputGroup}>
                             <Text style={styles.inputLabel}>Pincode</Text>
-                            <TextInput style={styles.input} keyboardType="number-pad" onChangeText={t => setAddress({...address, pincode: t})} />
+                            <TextInput style={styles.input} keyboardType="number-pad" onChangeText={t => setAddress({...address, pincode: t})} maxLength={6} />
                         </View>
                          <View style={styles.inputGroup}>
                             <Text style={styles.inputLabel}>City</Text>
                             <TextInput style={styles.input} onChangeText={t => setAddress({...address, city: t})} />
                         </View>
+                    </View>
+                    <View style={styles.inputRow}>
                          <View style={styles.inputGroup}>
                             <Text style={styles.inputLabel}>State</Text>
                             <TextInput style={styles.input} onChangeText={t => setAddress({...address, state: t})} />
+                        </View>
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Country</Text>
+                            <TextInput style={styles.input} value={address.country} onChangeText={t => setAddress({...address, country: t})} />
                         </View>
                     </View>
                 </View>
             </ScrollView>
 
             <View style={styles.footer}>
-                <TouchableOpacity style={styles.paymentButton} onPress={handleContinueToPayment}>
-                    <Text style={styles.paymentButtonText}>Continue to Payment</Text>
+                <TouchableOpacity style={[styles.paymentButton, isLoading && styles.disabledButton]} onPress={handleContinueToPayment} disabled={isLoading}>
+                    {isLoading ? (
+                        <ActivityIndicator color={Colors.textLight} />
+                    ) : (
+                        <Text style={styles.paymentButtonText}>Continue to Payment</Text>
+                    )}
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
@@ -238,6 +294,7 @@ const styles = StyleSheet.create({
         fontSize: fontScale(14),
         fontWeight: 'bold',
         color: Colors.textDark,
+        flexShrink: 1
     },
     itemFor: {
         fontSize: fontScale(12),
@@ -247,6 +304,7 @@ const styles = StyleSheet.create({
         fontSize: fontScale(14),
         fontWeight: 'bold',
         color: Colors.textDark,
+        marginLeft: scale(8),
     },
     priceBreakdown: {
         borderTopWidth: 1,
@@ -286,12 +344,13 @@ const styles = StyleSheet.create({
     inputRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        marginHorizontal: -scale(4)
     },
     inputGroup: {
         flex: 1,
         marginHorizontal: scale(4),
     },
-     inputGroupFull: {
+    inputGroupFull: {
         marginHorizontal: scale(4),
     },
     inputLabel: {
@@ -321,6 +380,10 @@ const styles = StyleSheet.create({
         paddingVertical: verticalScale(14),
         borderRadius: moderateScale(8),
         alignItems: 'center',
+    },
+    disabledButton: {
+        backgroundColor: Colors.primary,
+        opacity: 0.7,
     },
     paymentButtonText: {
         color: Colors.textLight,
