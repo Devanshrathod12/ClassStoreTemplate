@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -6,39 +6,137 @@ import {
     SafeAreaView,
     StatusBar,
     ScrollView,
-    TouchableOpacity
+    TouchableOpacity,
+    ActivityIndicator,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { showMessage } from 'react-native-flash-message';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-
 import Colors from '../../styles/colors';
 import { scale, fontScale, verticalScale, moderateScale } from '../../styles/stylesconfig';
 import NavigationString from '../../Navigation/NavigationString';
-
-const packagesData = [
-    { id: 1, title: 'Early Foundation Pack', popular: true, price: 899, originalPrice: 1199, description: 'Perfect for building basic learning foundations.', books: ['Picture Story Books (5)', 'Activity Workbooks (3)', 'Coloring Books (2)', 'Number & Alphabet Charts'], subjects: ['Pre-reading', 'Pre-Math', 'Creative Arts', 'Motor Skills'], features: ['Age-appropriate content', 'Interactive activities', 'Parent guidance included', 'Colorful illustrations'] },
-    { id: 2, title: 'Advanced Learner Kit', popular: false, price: 1299, originalPrice: 1599, description: 'Designed to challenge and enhance skills.', books: ['Chapter Story Books (4)', 'Science Workbooks (3)', 'Creative Writing Guides (2)', 'World Atlas & Maps'], subjects: ['Reading Comprehension', 'Basic Science', 'Writing Skills', 'Geography'], features: ['Advanced curriculum', 'Critical thinking exercises', 'Independent learning focus', 'Detailed illustrations'] },
-    { id: 3, title: 'Hobby Explorer Bundle', popular: false, price: 1599, originalPrice: 1999, description: 'Explore new interests and creative hobbies.', books: ['DIY Craft Books (3)', 'Beginner Coding Guide (1)', 'Musical Instrument Basics (2)', 'Gardening for Kids'], subjects: ['Arts & Crafts', 'Logic & Coding', 'Music Theory', 'Botany'], features: ['Hands-on projects', 'Fun and engaging topics', 'Develops new hobbies', 'Step-by-step guides'] },
-];
+import { apiGet ,apiPost} from '../../api/api';
 
 const SelectPackageScreen = ({ route, navigation }) => {
-    const child = route.params?.child;
+    const { child } = route.params;
+    const [packages, setPackages] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [AddedToCartIds,setAddedToCartIds] = useState([])
+    useFocusEffect(
+        useCallback(() => {
+            const fetchPackages = async () => {
+                if (!child?.classId) {
+                    showMessage({
+                        message: "Error",
+                        description: "Could not find class information for this child.",
+                        type: "danger",
+                    });
+                    setIsLoading(false);
+                    return;
+                }
 
+                setIsLoading(true);
+                try {
+                    const response = await apiGet(`/api/v1/bundle/class/${child.classId}`);
+                    if (response && Array.isArray(response)) {
+                        const formattedPackages = response.map(pkg => {
+                            const price = parseFloat(pkg.price);
+                            const discount = parseFloat(pkg.discount);
+                            const originalPrice = price + discount;
+                            
+                            return {
+                                ...pkg,
+                                id: pkg.bundle_id,
+                                title: pkg.bundle_name,
+                                price: price,
+                                originalPrice: originalPrice,
+                                description: `A curated educational package for Class ${child.standard}.`,
+                                books: ['Picture Story Books (5)', 'Activity Workbooks (3)', 'Coloring Books (2)', 'Number & Alphabet Charts'],
+                                subjects: ['Pre-reading', 'Pre-Math', 'Creative Arts', 'Motor Skills'],
+                                features: ['Age-appropriate content', 'Interactive activities', 'Parent guidance included', 'Colorful illustrations']
+                            };
+                        });
+                        setPackages(formattedPackages);
+                    } else {
+                        setPackages([]);
+                    }
+                } catch (error) {
+                    console.error("Failed to fetch packages:", error);
+                    showMessage({
+                        message: "API Error",
+                        description: "Could not fetch available bundles. Please try again later.",
+                        type: "danger",
+                    });
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            fetchPackages();
+        }, [child])
+    );
+    
     if (!child) {
         return (
             <SafeAreaView style={styles.container}>
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-                    <Text style={{ fontSize: 18, color: 'red', textAlign: 'center' }}>Error: Could not load child details.</Text>
+                <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>Error: Could not load child details.</Text>
                     <TouchableOpacity onPress={() => navigation.goBack()}>
-                        <Text style={{ color: Colors.primary, marginTop: 15, fontSize: 16 }}>Go Back</Text>
+                        <Text style={styles.goBackText}>Go Back</Text>
                     </TouchableOpacity>
                 </View>
             </SafeAreaView>
         );
     }
 
+    const HandleAddToCart = async (bundleId) => {
+       
+        if (!bundleId) {
+            showMessage({message:"Error",description:"bundle information is missing.",type:"danger"})
+            return;
+        }
+
+        showMessage({message:"Adding To Cart",type:"info"})
+
+         try {
+            const expiresAt  = new Date()
+            expiresAt.setDate(expiresAt.getDate() + 1)
+
+            const payload = {
+                  bundle_id: String(bundleId),
+            quantity: 1, 
+            expires_at: expiresAt.toISOString(),
+            }
+
+        console.log(JSON.stringify(payload, null, 2));
+        const response = await apiPost('/api/v1/cart', payload);
+
+        setAddedToCartIds(prevIds => [...prevIds,bundleId])
+
+
+        console.log(" Cart Response ---");
+        console.log(JSON.stringify(response, null, 2));
+        showMessage({
+            message: "Success!",
+            description: "Bundle added to your cart.",
+            type: "success",
+            icon: "success",
+        });
+
+         } catch (error) {
+              console.error("Failed to add to cart:", error.response?.data || error);
+        showMessage({
+            message: "Failed to Add",
+            description: "Could not add the bundle to your cart. Please try again.",
+            type: "danger",
+        });
+         }
+    }
+    
     const renderPackage = (pkg) => {
         const savedAmount = pkg.originalPrice - pkg.price;
+        const isAdded = AddedToCartIds.includes(pkg.id)
         return (
             <View key={pkg.id} style={styles.packageCard}>
                 <View style={styles.packageHeader}>
@@ -47,37 +145,74 @@ const SelectPackageScreen = ({ route, navigation }) => {
                         <Text style={styles.packageDescription}>{pkg.description}</Text>
                     </View>
                     <View style={styles.priceContainer}>
-                        {pkg.popular && <View style={styles.popularTag}><Text style={styles.popularText}>★ Popular</Text></View>}
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}>
-                            <Text style={styles.originalPrice}>₹{pkg.originalPrice}</Text>
-                            <Text style={styles.finalPrice}>₹{pkg.price}</Text>
+                            <Text style={styles.originalPrice}>₹{pkg.originalPrice.toFixed(2)}</Text>
+                            <Text style={styles.finalPrice}>₹{pkg.price.toFixed(2)}</Text>
                         </View>
-                        <View style={styles.saveTag}><Text style={styles.saveText}>Save ₹{savedAmount}</Text></View>
+                        {savedAmount > 0 && (
+                             <View style={styles.saveTag}><Text style={styles.saveText}>Save ₹{savedAmount.toFixed(2)}</Text></View>
+                        )}
                     </View>
                 </View>
+
+                {/* --- DETAILS COMMENTED OUT --- */}
+                {/* 
                 <View style={styles.detailsSection}>
-                    <Text style={styles.detailTitle}><MaterialCommunityIcons name="bookshelf" /> Books Included</Text>
+                    <Text style={styles.detailTitle}><MaterialCommunityIcons name="bookshelf" /> Books Included (Sample)</Text>
                     {pkg.books.map((book, i) => <Text key={i} style={styles.detailItem}>- {book}</Text>)}
                 </View>
                 <View style={styles.detailsSection}>
-                    <Text style={styles.detailTitle}>Subjects Covered</Text>
+                    <Text style={styles.detailTitle}>Subjects Covered (Sample)</Text>
                     <View style={styles.subjectsContainer}>
                         {pkg.subjects.map((subject, i) => <View key={i} style={styles.subjectTag}><Text style={styles.subjectText}>{subject}</Text></View>)}
                     </View>
                 </View>
                 <View style={styles.detailsSection}>
-                    <Text style={styles.detailTitle}>Key Features</Text>
+                    <Text style={styles.detailTitle}>Key Features (Sample)</Text>
                     {pkg.features.map((feature, i) => <Text key={i} style={styles.featureItem}><MaterialIcons name="check" color={Colors.success} /> {feature}</Text>)}
                 </View>
-                <TouchableOpacity 
-                    style={styles.orderButton}
-                    onPress={() => navigation.navigate(NavigationString.DeliveryAddress, { child: child, pkg: pkg })}
-                >
-                    <MaterialCommunityIcons name="cart-check" size={scale(18)} color={Colors.textLight} />
-                    <Text style={styles.orderButtonText}>Order This Bundle</Text>
-                </TouchableOpacity>
+                */}
+                {/* --- END OF COMMENTED OUT DETAILS --- */}
+
+                <View style={styles.buttonRow}>
+                    <TouchableOpacity 
+                        style={isAdded ? styles.addedToCartButton : styles.addToCartButton}
+                        onPress={() => HandleAddToCart(pkg.id)}
+                        disabled={isAdded}
+                    >
+                        {isAdded ? (
+                                <MaterialIcons name="check" size={scale(18)} color={Colors.success} />
+                        ) : (
+                                 <MaterialCommunityIcons name="cart-plus" size={scale(18)} color={Colors.primary} />
+                        )}
+                       
+                        <Text style={ isAdded ? styles.addedToCartButtonText : styles.addToCartButtonText}>{isAdded ? "Added" : "Add To Cart" }</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                        style={styles.orderButton}
+                        onPress={() => navigation.navigate(NavigationString.DeliveryAddress, { child: child, pkg: pkg })}
+                    >
+                        <Text style={styles.orderButtonText}>Order Now</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
         );
+    };
+
+    const renderContent = () => {
+        if (isLoading) {
+            return <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 50 }} />;
+        }
+        if (packages.length === 0) {
+            return (
+                <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>No bundles available for this class right now.</Text>
+                    <Text style={styles.emptySubText}>Please check back later.</Text>
+                </View>
+            );
+        }
+        return packages.map(pkg => renderPackage(pkg));
     };
 
     return (
@@ -89,19 +224,21 @@ const SelectPackageScreen = ({ route, navigation }) => {
                 </TouchableOpacity>
                 <View>
                     <Text style={styles.headerTitle}>Select Bundle</Text>
-                    <Text style={styles.headerSubtitle}>For {child.name} • {child.standard} standard</Text>
+                    <Text style={styles.headerSubtitle}>For {child.name} • Class {child.standard}</Text>
                 </View>
                 <View style={{ width: scale(24) }} />
             </View>
             <ScrollView contentContainerStyle={styles.content}>
                 <View style={styles.childBanner}>
-                    <View style={styles.childIconCircle} />
+                     <View style={styles.childIconCircle}>
+                        {/* <Text style={styles.childIconText}>{getInitials(child.name)}</Text> */}
+                    </View>
                     <View>
                         <Text style={styles.childName}>{child.name}</Text>
-                        <Text style={styles.childDetails}>{child.age} years • {child.schoolName}</Text>
+                        <Text style={styles.childDetails}>{child.age} years • {child.school_name}</Text>
                     </View>
                 </View>
-                {packagesData.map(pkg => renderPackage(pkg))}
+                {renderContent()}
             </ScrollView>
         </SafeAreaView>
     );
@@ -138,6 +275,41 @@ const styles = StyleSheet.create({
         paddingBottom: verticalScale(30),
         backgroundColor: Colors.backgroundLight,
     },
+    errorContainer: {
+        flex: 1, 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        padding: 20 
+    },
+    errorText: {
+        fontSize: 18, 
+        color: 'red', 
+        textAlign: 'center'
+    },
+    goBackText: {
+        color: Colors.primary, 
+        marginTop: 15, 
+        fontSize: 16 
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 50,
+        paddingHorizontal: 20,
+    },
+    emptyText: {
+        fontSize: fontScale(16),
+        fontWeight: 'bold',
+        color: Colors.textSecondary,
+        textAlign: 'center',
+    },
+    emptySubText: {
+        fontSize: fontScale(14),
+        color: Colors.textMuted,
+        marginTop: verticalScale(5),
+        textAlign: 'center',
+    },
     childBanner: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -150,11 +322,18 @@ const styles = StyleSheet.create({
         marginBottom: verticalScale(20),
     },
     childIconCircle: {
-        width: scale(32),
-        height: scale(32),
-        borderRadius: scale(16),
+        width: scale(36),
+        height: scale(36),
+        borderRadius: scale(18),
         backgroundColor: Colors.textLight,
         marginRight: scale(12),
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    childIconText: {
+        fontSize: fontScale(18),
+        fontWeight: 'bold',
+        color: Colors.primary,
     },
     childName: {
         color: Colors.textLight,
@@ -200,18 +379,6 @@ const styles = StyleSheet.create({
     priceContainer: {
         alignItems: 'flex-end',
     },
-    popularTag: {
-        backgroundColor: Colors.backgroundPrimaryLight,
-        borderRadius: moderateScale(6),
-        paddingHorizontal: scale(8),
-        paddingVertical: verticalScale(3),
-        marginBottom: verticalScale(4),
-    },
-    popularText: {
-        color: Colors.primary,
-        fontSize: fontScale(11),
-        fontWeight: 'bold',
-    },
     originalPrice: {
         textDecorationLine: 'line-through',
         color: Colors.textMuted,
@@ -224,14 +391,14 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     saveTag: {
-        backgroundColor: '#FFEBEE',
+        backgroundColor: '#E8F5E9',
         borderRadius: moderateScale(6),
         paddingHorizontal: scale(8),
         paddingVertical: verticalScale(3),
         marginTop: verticalScale(4),
     },
     saveText: {
-        color: Colors.danger,
+        color: Colors.success,
         fontSize: fontScale(11),
         fontWeight: 'bold',
     },
@@ -271,6 +438,30 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
         marginBottom: verticalScale(5),
     },
+    buttonRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: verticalScale(15),
+    },
+    addToCartButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.backgroundLight,
+        borderWidth: 1,
+        borderColor: Colors.primary,
+        paddingVertical: verticalScale(12),
+        borderRadius: moderateScale(8),
+        flex: 1,
+        marginRight: scale(10),
+    },
+    addToCartButtonText: {
+        color: Colors.primary,
+        fontSize: fontScale(16),
+        fontWeight: 'bold',
+        marginLeft: scale(8),
+    },
     orderButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -278,14 +469,30 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.button,
         paddingVertical: verticalScale(12),
         borderRadius: moderateScale(8),
-        marginTop: verticalScale(15),
+        flex: 1,
     },
     orderButtonText: {
         color: Colors.textLight,
         fontSize: fontScale(16),
         fontWeight: 'bold',
+    },
+     addedToCartButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#E8F5E9', // Halka green background
+        borderWidth: 1,
+        borderColor: Colors.success,
+        paddingVertical: verticalScale(12),
+        borderRadius: moderateScale(8),
+        flex: 1,
+        marginRight: scale(10),
+    },
+    addedToCartButtonText: {
+        color: Colors.success,
+        fontSize: fontScale(16),
+        fontWeight: 'bold',
         marginLeft: scale(8),
-        
     },
 });
 

@@ -742,3 +742,4 @@ const styles = StyleSheet.create({
 });
 
 export default AddChildScreen;
+// ye wo code hai jisme addchild me sirf child ka data dikh rha hai update bnhi ho rha delete ho rha hai 

@@ -45,7 +45,7 @@ const ChildCard = ({ child, index, onPress }) => {
             <View style={[styles.cardAvatar, { backgroundColor: cardColor }]}>
                 <Text style={styles.cardAvatarText}>{getInitials(child.name)}</Text>
             </View>
-            <Text style={styles.cardName}>{child.name || 'No Name'}</Text>
+            <Text style={styles.cardName} numberOfLines={1}>{child.name || 'No Name'}</Text>
             <View style={styles.cardDetailsContainer}>
                 <View style={styles.cardDetailItem}>
                     <MaterialCommunityIcons name="cake-variant-outline" size={scale(14)} color={Colors.textSecondary} />
@@ -77,7 +77,6 @@ const EmptyStateCard = ({ onPress }) => (
 const YourChildrenScreen = ({ route, navigation }) => {
     const [children, setChildren] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const newlyAddedChildren = route.params?.newlyAddedChildren;
 
     useFocusEffect(
         useCallback(() => {
@@ -94,13 +93,14 @@ const YourChildrenScreen = ({ route, navigation }) => {
                         if (response && Array.isArray(response)) {
                             const enrichedChildren = response.map(apiChild => {
                                 const persistentData = extraData[apiChild.name] || {};
-                                const navParamData = newlyAddedChildren?.find(p => p.name === apiChild.name) || {};
-                                
                                 return {
                                     ...apiChild,
-                                    age: calculateAge(apiChild.dob), // Calculate age from DOB
-                                    school_name: apiChild.school_name || navParamData.school_name || persistentData.school_name,
-                                    class_name: apiChild.class_name || navParamData.class_name || persistentData.class_name,
+                                    classId: apiChild.class_id,
+                                    schoolId: apiChild.school_id,
+                                    age: calculateAge(apiChild.dob),
+                                    school_name: persistentData.school_name || 'N/A',
+                                    class_name: persistentData.class_name || 'N/A',
+                                    standard: persistentData.class_name || 'N/A',
                                 };
                             });
                             setChildren(enrichedChildren);
@@ -120,8 +120,12 @@ const YourChildrenScreen = ({ route, navigation }) => {
                 }
             };
             fetchData();
-        }, [newlyAddedChildren])
+        }, [route.params?.refresh])
     );
+
+    const handleChildPress = (child) => {
+        navigation.navigate(NavigationString.SelectPackage, { child: child });
+    };
 
     const renderChildrenContent = () => {
         if (isLoading) {
@@ -143,7 +147,7 @@ const YourChildrenScreen = ({ route, navigation }) => {
                             key={child.id}
                             child={child}
                             index={index}
-                            onPress={() => navigation.navigate(NavigationString.SelectPackage, { child: child })}
+                            onPress={() => handleChildPress(child)}
                         />
                     ))}
                 </ScrollView>
@@ -169,7 +173,7 @@ const YourChildrenScreen = ({ route, navigation }) => {
                         {!isLoading && children.length > 0 && (
                              <TouchableOpacity 
                                 style={styles.editButton}
-                                onPress={() => navigation.navigate(NavigationString.AddChild, { editMode: true })}
+                                onPress={() => navigation.navigate(NavigationString.AddChild, { existingChildren: children })}
                             >
                                 <MaterialIcons name="edit" size={scale(18)} color={Colors.primary} />
                                 <Text style={styles.editButtonText}>Edit</Text>
@@ -178,18 +182,6 @@ const YourChildrenScreen = ({ route, navigation }) => {
                     </View>
                     {renderChildrenContent()}
                 </View>
-                <View style={styles.statsRow}>
-                    <View style={styles.statBox}>
-                        <MaterialCommunityIcons name="book-open-page-variant-outline" size={scale(22)} color={Colors.primary} />
-                        <Text style={styles.statValue}>24 Books</Text>
-                        <Text style={styles.statLabel}>Recommended</Text>
-                    </View>
-                    <View style={styles.statBox}>
-                        <MaterialCommunityIcons name="progress-check" size={scale(22)} color={Colors.success} />
-                        <Text style={styles.statValue}>92%</Text>
-                        <Text style={styles.statLabel}>Progress</Text>
-                    </View>
-                </View>
                 <View style={styles.section}>
                     <View style={styles.exploreCard}>
                         <Text style={styles.exploreTitle}>Explore ClassStore</Text>
@@ -197,7 +189,7 @@ const YourChildrenScreen = ({ route, navigation }) => {
                             <MaterialCommunityIcons name="account-plus-outline" size={scale(20)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>Add Another Child</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.exploreItem}>
+                        <TouchableOpacity onPress={()=> navigation.navigate("MyCart")} style={styles.exploreItem}>
                             <MaterialCommunityIcons name="cart-outline" size={scale(20)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>My Cart</Text>
                         </TouchableOpacity>
