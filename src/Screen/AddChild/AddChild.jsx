@@ -19,6 +19,7 @@ import { showMessage } from 'react-native-flash-message';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Calendar } from 'react-native-calendars';
 import Colors from '../../styles/colors';
 import {
   scale,
@@ -40,7 +41,13 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
   const [classOptionsFromApi, setClassOptionsFromApi] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState(null);
-  const [mobileNumber, setMobileNumber] = useState('');
+
+  // --- Calendar State ---
+  const [isCalendarVisible, setCalendarVisible] = useState(false);
+  const [datePickerIndex, setDatePickerIndex] = useState(null);
+  const [pickerMode, setPickerMode] = useState('day'); // 'day', 'month', 'year'
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date().toISOString().slice(0, 10));
 
   const classDropdownRefs = useRef([]);
   const schoolDropdownRefs = useRef([]);
@@ -56,14 +63,10 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
     const getAsyncData = async () => {
       try {
         const storedUserId = await AsyncStorage.getItem('userId');
-        const storedMobileNumber = await AsyncStorage.getItem('mobile_number');
         if (storedUserId) {
           setUserId(storedUserId);
         } else {
           showMessage({ message: "Session Error", description: "User not found. Please log in again.", type: "danger" });
-        }
-        if (storedMobileNumber) {
-          setMobileNumber(storedMobileNumber);
         }
       } catch (e) {
         console.error('Failed to fetch data from AsyncStorage:', e);
@@ -119,6 +122,33 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
     setLocalChildren(newChildren);
   };
 
+  const openCalendarForChild = (index) => {
+    setDatePickerIndex(index);
+    const initialDate = localChildren[index]?.dob ? localChildren[index].dob.replace(/\//g, '-') : new Date().toISOString().slice(0, 10);
+    setCurrentCalendarDate(initialDate);
+    setCalendarVisible(true);
+    setPickerMode('day');
+  };
+  
+  const handleDayPress = (day) => {
+    const formattedDate = day.dateString.replace(/-/g, '/');
+    const newChildren = [...localChildren];
+    newChildren[datePickerIndex].dob = formattedDate;
+    setLocalChildren(newChildren);
+    setCalendarVisible(false);
+  };
+
+  const handleYearSelect = (year) => {
+    setSelectedYear(year);
+    setPickerMode('month');
+  };
+
+  const handleMonthSelect = (monthIndex) => {
+    const newDate = `${selectedYear}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+    setCurrentCalendarDate(newDate);
+    setPickerMode('day');
+  };
+
   const openDropdown = (index, field, ref) => {
     if (!ref) return;
     ref.measure((_fx, _fy, width, height, px, py) => {
@@ -156,10 +186,12 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
 
   const handleSaveAndContinue = async () => {
     const childrenToSave = localChildren.filter(child => child.name && child.dob && child.classId && child.schoolId);
+
     if (localChildren.some(c => c.name || c.dob || c.standard || c.schoolName) && childrenToSave.length !== localChildren.length) {
       showMessage({ message: "Incomplete Information", description: "Please fill in all details for each child.", type: "warning" });
       return;
     }
+
     if (childrenToSave.length === 0) {
       navigation.navigate(NavigationString.YourChildrenScreen);
       return;
@@ -171,12 +203,14 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
     setIsLoading(true);
     try {
       const createChildrenPromises = childrenToSave.map(child => {
+        const formattedDob = child.dob.replace(/\//g, '-');
+
         const payload = {
           name: child.name,
-          age: 10,
+          dob: formattedDob,
           user_id: parseInt(userId),
-          class_id: child.classId,
-          school_id: child.schoolId,
+          class_id: String(child.classId),
+          school_id: String(child.schoolId),
         };
         return apiPost('/api/v1/children', payload);
       });
@@ -225,7 +259,7 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
         <View style={[styles.modalContent, { top: dropdownPosition.top, left: dropdownPosition.left, width: dropdownPosition.width }]}>
           <FlatList
             data={dropdownData}
-            keyExtractor={item => item.school_id || item.class_id}
+            keyExtractor={item => String(item.school_id || item.class_id)}
             renderItem={({ item }) => (
               <TouchableOpacity style={styles.modalItem} onPress={() => handleSelectOption(item)}>
                 <Text style={styles.modalItemText}>{item.school_name || item.class_number}</Text>
@@ -236,6 +270,91 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
       </TouchableOpacity>
     </Modal>
   );
+
+  const CalendarModal = () => {
+    const renderContent = () => {
+        switch (pickerMode) {
+            case 'year':
+                const years = Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i);
+                return (
+                    <FlatList
+                        data={years}
+                        keyExtractor={(item) => String(item)}
+                        ListHeaderComponent={() => <Text style={styles.pickerTitle}>Select a Year</Text>}
+                        renderItem={({ item }) => (
+                            <TouchableOpacity style={styles.pickerItem} onPress={() => handleYearSelect(item)}>
+                                <Text style={styles.pickerItemText}>{item}</Text>
+                            </TouchableOpacity>
+                        )}
+                        numColumns={4}
+                    />
+                );
+            case 'month':
+                const months = Array.from({ length: 12 }, (_, i) => 
+                    new Date(0, i).toLocaleString('default', { month: 'long' })
+                );
+                return (
+                    <View>
+                         <TouchableOpacity onPress={() => setPickerMode('year')}>
+                            <Text style={styles.pickerTitle}>{`Select a Month in ${selectedYear}`}</Text>
+                        </TouchableOpacity>
+                        <FlatList
+                            data={months}
+                            keyExtractor={(item) => item}
+                            renderItem={({ item, index }) => (
+                                <TouchableOpacity style={styles.pickerItem} onPress={() => handleMonthSelect(index)}>
+                                    <Text style={styles.pickerItemText}>{item}</Text>
+                                </TouchableOpacity>
+                            )}
+                            numColumns={3}
+                        />
+                    </View>
+                );
+            case 'day':
+            default:
+                return (
+                    <Calendar
+                        key={currentCalendarDate}
+                        current={currentCalendarDate}
+                        onDayPress={handleDayPress}
+                        maxDate={new Date().toISOString().split('T')[0]}
+                        markedDates={{
+                            [localChildren[datePickerIndex]?.dob.replace(/\//g, '-')]: { selected: true, selectedColor: Colors.primary }
+                        }}
+                        renderHeader={(date) => {
+                            const headerDate = new Date(date);
+                            const month = headerDate.toLocaleString('default', { month: 'long' });
+                            const year = headerDate.getFullYear();
+                            return (
+                                <TouchableOpacity style={styles.calendarHeader} onPress={() => setPickerMode('year')}>
+                                    <Text style={styles.calendarHeaderText}>{`${month} ${year}`}</Text>
+                                </TouchableOpacity>
+                            );
+                        }}
+                        onMonthChange={(month) => {
+                            setCurrentCalendarDate(month.dateString);
+                        }}
+                        theme={{ todayTextColor: Colors.primary, arrowColor: Colors.primary }}
+                    />
+                );
+        }
+    };
+
+    return (
+        <Modal
+            visible={isCalendarVisible}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setCalendarVisible(false)}
+        >
+            <TouchableOpacity style={styles.calendarOverlay} onPress={() => setCalendarVisible(false)}>
+                <TouchableOpacity activeOpacity={1} style={styles.calendarContainer}>
+                   {renderContent()}
+                </TouchableOpacity>
+            </TouchableOpacity>
+        </Modal>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -249,15 +368,7 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
             <Text style={styles.title}>Almost There!</Text>
             <Text style={styles.subtitle}>Tell us about your children to personalize their learning</Text>
           </View>
-          <View style={styles.loggedInContainer}>
-            <View style={styles.loggedInIconCircle}>
-              <MaterialIcons name="check" size={scale(20)} color={Colors.success} />
-            </View>
-            <View>
-              <Text style={styles.loggedInText}>Logged in as</Text>
-              <Text style={styles.loggedInNumber}>+91 {mobileNumber}</Text>
-            </View>
-          </View>
+
           <View style={styles.formContainer}>
             <View style={styles.formHeader}>
               <MaterialIcons name="school" size={scale(20)} color={Colors.primary} />
@@ -274,8 +385,14 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
                 <Text style={styles.childLabel}>Child {index + 1}</Text>
                 <Text style={styles.inputLabel}>Name</Text>
                 <TextInput style={styles.input} placeholder="Enter child's name" placeholderTextColor={Colors.textMuted} value={child.name} onChangeText={text => handleTextInputChange(index, 'name', text)} />
+                
                 <Text style={styles.inputLabel}>Date of Birth</Text>
-                <TextInput style={styles.input} placeholder="DD/MM/YYYY" placeholderTextColor={Colors.textMuted} value={child.dob} onChangeText={text => handleTextInputChange(index, 'dob', text)} />
+                <TouchableOpacity style={styles.input} onPress={() => openCalendarForChild(index)}>
+                    <Text style={child.dob ? styles.dateText : styles.datePlaceholder}>
+                        {child.dob || 'YYYY/MM/DD'}
+                    </Text>
+                </TouchableOpacity>
+
                 <Text style={styles.inputLabel}>School Name</Text>
                 <TouchableOpacity ref={el => (schoolDropdownRefs.current[index] = el)} style={styles.dropdown} onPress={() => openDropdown(index, 'schoolName', schoolDropdownRefs.current[index])}>
                   <Text style={child.schoolName ? styles.dropdownTextSelected : styles.dropdownText}>{child.schoolName || 'Select school'}</Text>
@@ -288,6 +405,7 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
                 </TouchableOpacity>
               </View>
             ))}
+
             <TouchableOpacity style={styles.addChildButton} onPress={handleAddChild}>
               <MaterialIcons name="add" size={scale(18)} color={Colors.primary} />
               <Text style={styles.addChildText}>Add Another Child</Text>
@@ -309,6 +427,7 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
           <Text style={styles.termsText}>By continuing, you agree to our Terms of Service and Privacy Policy.</Text>
         </ScrollView>
         <DropdownModal />
+        <CalendarModal />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -351,31 +470,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(20),
     marginTop: verticalScale(20),
     lineHeight: verticalScale(16),
-  },
-  loggedInContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.success,
-    width: '100%',
-    paddingVertical: verticalScale(12),
-    paddingHorizontal: scale(16),
-    borderRadius: moderateScale(10),
-    marginTop: verticalScale(20),
-  },
-  loggedInIconCircle: {
-    width: scale(32),
-    height: scale(32),
-    borderRadius: scale(16),
-    backgroundColor: Colors.textLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: scale(12),
-  },
-  loggedInText: { color: Colors.textLight, fontSize: fontScale(12) },
-  loggedInNumber: {
-    color: Colors.textLight,
-    fontSize: fontScale(14),
-    fontWeight: '500',
   },
   formContainer: {
     width: '100%',
@@ -439,10 +533,17 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(8),
     paddingHorizontal: scale(12),
     backgroundColor: Colors.backgroundFaded,
-    fontSize: fontScale(14),
-    color: Colors.textDark,
+    justifyContent: 'center',
     height: verticalScale(45),
     marginBottom: verticalScale(12),
+  },
+  datePlaceholder: {
+    fontSize: fontScale(14),
+    color: Colors.textMuted,
+  },
+  dateText: {
+    fontSize: fontScale(14),
+    color: Colors.textDark,
   },
   dropdown: {
     flexDirection: 'row',
@@ -523,6 +624,48 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.borderLight,
   },
   modalItemText: { fontSize: fontScale(14), color: Colors.textPrimary },
+  calendarOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  calendarContainer: {
+    backgroundColor: 'white',
+    borderRadius: moderateScale(10),
+    padding: moderateScale(10),
+    width: '90%',
+    maxHeight: '70%',
+  },
+  calendarHeader: {
+    padding: 10,
+    alignItems: 'center',
+  },
+  calendarHeaderText: {
+    fontSize: fontScale(16),
+    fontWeight: 'bold',
+    color: Colors.primary,
+  },
+  pickerTitle: {
+    fontSize: fontScale(18),
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginVertical: verticalScale(10),
+    color: Colors.textPrimary,
+  },
+  pickerItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: verticalScale(12),
+    margin: 4,
+    backgroundColor: Colors.backgroundFaded,
+    borderRadius: moderateScale(8),
+  },
+  pickerItemText: {
+    fontSize: fontScale(14),
+    color: Colors.textDark,
+  },
 });
 
 export default AddChildScreen;

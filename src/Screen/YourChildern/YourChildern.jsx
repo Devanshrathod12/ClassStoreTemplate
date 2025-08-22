@@ -26,6 +26,18 @@ const getInitials = (name) => {
     return name.charAt(0).toUpperCase();
 };
 
+const calculateAge = (dob) => {
+    if (!dob) return null;
+    const birthDate = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDifference = today.getMonth() - birthDate.getMonth();
+    if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+    }
+    return age;
+};
+
 const ChildCard = ({ child, index, onPress }) => {
     const cardColor = avatarColors[index % avatarColors.length];
     return (
@@ -37,7 +49,7 @@ const ChildCard = ({ child, index, onPress }) => {
             <View style={styles.cardDetailsContainer}>
                 <View style={styles.cardDetailItem}>
                     <MaterialCommunityIcons name="cake-variant-outline" size={scale(14)} color={Colors.textSecondary} />
-                    <Text style={styles.cardDetailText}>{child.age ? `${child.age} years` : 'N/A'}</Text>
+                    <Text style={styles.cardDetailText}>{child.age !== null ? `${child.age} years` : 'N/A'}</Text>
                 </View>
                 <View style={styles.cardDetailItem}>
                     <MaterialCommunityIcons name="school-outline" size={scale(14)} color={Colors.textSecondary} />
@@ -65,7 +77,6 @@ const EmptyStateCard = ({ onPress }) => (
 const YourChildrenScreen = ({ route, navigation }) => {
     const [children, setChildren] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [mobileNumber, setMobileNumber] = useState('');
     const newlyAddedChildren = route.params?.newlyAddedChildren;
 
     useFocusEffect(
@@ -74,10 +85,6 @@ const YourChildrenScreen = ({ route, navigation }) => {
                 setIsLoading(true);
                 try {
                     const userId = await AsyncStorage.getItem('userId');
-                    const storedMobileNumber = await AsyncStorage.getItem('mobile_number');
-                    if (storedMobileNumber) {
-                        setMobileNumber(storedMobileNumber);
-                    }
                     if (userId) {
                         const storageKey = `children_extra_data_${userId}`;
                         const extraDataString = await AsyncStorage.getItem(storageKey);
@@ -91,6 +98,7 @@ const YourChildrenScreen = ({ route, navigation }) => {
                                 
                                 return {
                                     ...apiChild,
+                                    age: calculateAge(apiChild.dob), // Calculate age from DOB
                                     school_name: apiChild.school_name || navParamData.school_name || persistentData.school_name,
                                     class_name: apiChild.class_name || navParamData.class_name || persistentData.class_name,
                                 };
@@ -154,15 +162,7 @@ const YourChildrenScreen = ({ route, navigation }) => {
                     </View>
                     <Text style={styles.appName}>ClassStore</Text>
                 </View>
-                <View style={styles.welcomeBanner}>
-                    <View style={styles.welcomeIconCircle}>
-                        <MaterialIcons name="check" size={scale(20)} color={Colors.success} />
-                    </View>
-                    <View>
-                        <Text style={styles.welcomeText}>Welcome back!</Text>
-                        <Text style={styles.welcomeNumber}>+91 {mobileNumber}</Text>
-                    </View>
-                </View>
+                
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Your Children</Text>
@@ -248,35 +248,6 @@ const styles = StyleSheet.create({
         fontSize: fontScale(18),
         fontWeight: 'bold',
         color: Colors.textPrimary,
-    },
-    welcomeBanner: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.success,
-        paddingVertical: verticalScale(12),
-        paddingHorizontal: scale(16),
-        borderRadius: moderateScale(12),
-        marginTop: verticalScale(10),
-        marginHorizontal: scale(16),
-    },
-    welcomeIconCircle: {
-        width: scale(32),
-        height: scale(32),
-        borderRadius: scale(16),
-        backgroundColor: Colors.textLight,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: scale(12),
-    },
-    welcomeText: {
-        color: Colors.textLight,
-        fontSize: fontScale(14),
-        fontWeight: 'bold',
-    },
-    welcomeNumber: {
-        color: Colors.textLight,
-        fontSize: fontScale(12),
-        fontWeight: '500',
     },
     section: {
         width: '100%',

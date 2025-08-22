@@ -16,9 +16,7 @@ import {
 import { showMessage } from 'react-native-flash-message';
 import OtpInputs from 'react-native-otp-inputs';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import FontAwesome from 'react-native-vector-icons/FontAwesome';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { apiPost } from '../../api/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../../styles/colors';
 import {
   scale,
@@ -26,15 +24,15 @@ import {
   verticalScale,
   moderateScale,
 } from '../../styles/stylesconfig';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { apiPost } from '../../api/api';
 
-const WelcomeScreen = ({ navigation, onLoginSuccess }) => {
+const WelcomeScreen = ({ onLoginSuccess }) => {
   const [otpSent, setOtpSent] = useState(false);
   const [mobileNumber, setMobileNumber] = useState('');
   const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(30);
-  const [isResendDisabled, setIsResendDisabled] = useState(false);
+  const [isResendDisabled, setIsResendDisabled] = useState(true);
 
   const scrollViewRef = useRef(null);
   const timerIntervalRef = useRef(null);
@@ -88,7 +86,7 @@ const WelcomeScreen = ({ navigation, onLoginSuccess }) => {
   const handleSendVerificationCode = async (isResend = false) => {
     if (mobileNumber.length < 10) {
       showMessage({
-        message: 'Galat Number',
+        message: 'Invalid Number',
         description: 'Please enter a valid 10-digit mobile number.',
         type: 'warning',
       });
@@ -101,25 +99,23 @@ const WelcomeScreen = ({ navigation, onLoginSuccess }) => {
       if (response.otp_sent) {
         setOtpSent(true);
         showMessage({
-          message: isResend
-            ? 'OTP Resent Successfully'
-            : 'OTP Bhej Diya Gaya Hai',
-          description: response.message || `OTP sent to +91 ${mobileNumber}`,
+          message: isResend ? 'OTP Resent Successfully' : 'OTP Sent Successfully',
+          description: response.message || `An OTP has been sent to +91 ${mobileNumber}`,
           type: 'success',
         });
       } else {
         showMessage({
           message: 'Error',
-          description: response.message || 'Failed to send OTP',
+          description: response.message || 'Failed to send OTP. Please try again.',
           type: 'danger',
         });
       }
     } catch (error) {
-      let errorMsg = 'OTP send karte waqt koi dikkat hui.';
+      let errorMsg = 'An unexpected error occurred while sending the OTP.';
       if (error.response?.data?.message) errorMsg = error.response.data.message;
       else if (error.message) errorMsg = error.message;
       showMessage({
-        message: 'OTP Bhejne Mein Error',
+        message: 'Failed to Send OTP',
         description: errorMsg,
         type: 'danger',
       });
@@ -131,8 +127,8 @@ const WelcomeScreen = ({ navigation, onLoginSuccess }) => {
   const handleVerify = async () => {
     if (otp.length < 6) {
       showMessage({
-        message: 'Adhura OTP',
-        description: 'Please enter all 6 digits to continue.',
+        message: 'Incomplete OTP',
+        description: 'Please enter all 6 digits of the OTP to continue.',
         type: 'warning',
       });
       return;
@@ -147,33 +143,33 @@ const WelcomeScreen = ({ navigation, onLoginSuccess }) => {
           await AsyncStorage.setItem('userId', String(response.user_id));
           await AsyncStorage.setItem('mobile_number', String(response.mobile_number));
           showMessage({
-            message: 'Verification Safal!',
-            description: response.message || 'OTP verified successfully!',
+            message: 'Verification Successful!',
+            description: response.message || 'You have been successfully verified!',
             type: 'success',
           });
           if (onLoginSuccess) onLoginSuccess();
         } catch (storageError) {
-          console.error('Failed to save the token to storage', storageError);
+          console.error('Failed to save user token to storage', storageError);
           showMessage({
             message: 'Session Error',
-            description: 'Could not save your session. Please try again.',
+            description: 'Could not save your session. Please try logging in again.',
             type: 'danger',
           });
         }
       } else {
         showMessage({
-          message: 'Verification Asafal',
+          message: 'Verification Failed',
           description:
-            response.message || 'Failed to verify OTP. Please try again.',
+            response.message || 'The OTP entered is incorrect. Please try again.',
           type: 'danger',
         });
       }
     } catch (error) {
-      let errorMsg = 'OTP verify karte waqt koi dikkat hui.';
+      let errorMsg = 'An unexpected error occurred during OTP verification.';
       if (error.response?.data?.message) errorMsg = error.response.data.message;
       else if (error.message) errorMsg = error.message;
       showMessage({
-        message: 'Verification Mein Error',
+        message: 'Verification Error',
         description: errorMsg,
         type: 'danger',
       });
@@ -212,33 +208,6 @@ const WelcomeScreen = ({ navigation, onLoginSuccess }) => {
             </View>
             <Text style={styles.appName}>ClassStore</Text>
             <Text style={styles.tagline}>Your digital learning companion</Text>
-          </View>
-
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <MaterialCommunityIcons
-                name="book-multiple-outline"
-                size={scale(22)}
-                color={Colors.primary}
-              />
-              <Text style={styles.statText}>10K+ Books</Text>
-            </View>
-            <View style={styles.statBox}>
-              <MaterialIcons
-                name="school"
-                size={scale(22)}
-                color={Colors.button}
-              />
-              <Text style={styles.statText}>Expert Authors</Text>
-            </View>
-            <View style={styles.statBox}>
-              <FontAwesome
-                name="users"
-                size={scale(20)}
-                color={Colors.primary}
-              />
-              <Text style={styles.statText}>1M+ Students</Text>
-            </View>
           </View>
 
           <View style={styles.formContainer}>
@@ -285,6 +254,17 @@ const WelcomeScreen = ({ navigation, onLoginSuccess }) => {
               </TouchableOpacity>
             ) : (
               <>
+                <Text style={styles.inputLabelotp}>Enter Verification Code</Text>
+                <OtpInputs
+                  autofillFromClipboard={false}
+                  numberOfInputs={6}
+                  autoFocus
+                  style={styles.otpContainer}
+                  inputContainerStyles={styles.otpBox}
+                  inputStyles={styles.otpText}
+                  handleChange={setOtp}
+                />
+
                 <TouchableOpacity
                   style={[
                     styles.resendOtpButton,
@@ -305,16 +285,6 @@ const WelcomeScreen = ({ navigation, onLoginSuccess }) => {
                   </Text>
                 </TouchableOpacity>
 
-                <Text style={styles.inputLabelotp}>Enter Verification Code</Text>
-                <OtpInputs
-                  autofillFromClipboard={false}
-                  numberOfInputs={6}
-                  autoFocus
-                  style={styles.otpContainer}
-                  inputContainerStyles={styles.otpBox}
-                  inputStyles={styles.otpText}
-                  handleChange={setOtp}
-                />
                 <TouchableOpacity
                   onPress={handleVerify}
                   style={styles.verifyButton}
@@ -333,25 +303,6 @@ const WelcomeScreen = ({ navigation, onLoginSuccess }) => {
               Policy.
             </Text>
           </View>
-
-          <View style={styles.footerContainer}>
-            <View style={styles.footerItem}>
-              <MaterialIcons
-                name="verified-user"
-                size={scale(16)}
-                color={Colors.textMuted}
-              />
-              <Text style={styles.footerText}>Trusted by millions</Text>
-            </View>
-            <View style={styles.footerItem}>
-              <MaterialCommunityIcons
-                name="content-copy"
-                size={scale(16)}
-                color={Colors.textMuted}
-              />
-              <Text style={styles.footerText}>Premium content</Text>
-            </View>
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -364,9 +315,9 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     alignItems: 'center',
     paddingHorizontal: scale(20),
-    paddingBottom: verticalScale(20),
+    paddingVertical: verticalScale(20),
   },
-  headerContainer: { alignItems: 'center', marginTop: verticalScale(15) },
+  headerContainer: { alignItems: 'center', marginTop: verticalScale(25) },
   logoContainer: {
     width: scale(70),
     height: scale(70),
@@ -386,34 +337,13 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: verticalScale(5),
   },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginTop: verticalScale(25),
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: Colors.backgroundPrimaryLight,
-    borderRadius: moderateScale(10),
-    paddingVertical: verticalScale(12),
-    alignItems: 'center',
-    marginHorizontal: scale(5),
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-  },
-  statText: {
-    fontSize: fontScale(12),
-    color: Colors.textSecondary,
-    marginTop: verticalScale(5),
-  },
   formContainer: {
     width: '100%',
     backgroundColor: Colors.WhiteBackgroudcolor,
     borderRadius: moderateScale(12),
     padding: moderateScale(20),
     alignItems: 'center',
-    marginTop: verticalScale(25),
+    marginTop: verticalScale(40),
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -446,10 +376,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   inputLabelotp: {
+    alignSelf: 'flex-start',
     fontSize: fontScale(14),
     color: Colors.textSecondary,
     fontWeight: '500',
-    marginBottom:verticalScale(12)
+    marginBottom: verticalScale(12),
   },
   editButtonText: {
     fontSize: fontScale(13),
@@ -500,25 +431,20 @@ const styles = StyleSheet.create({
   },
   resendOtpButton: {
     width: '100%',
-    paddingVertical: verticalScale(10),
-    borderRadius: moderateScale(8),
-    borderWidth: 1,
-    borderColor: Colors.border,
     alignItems: 'center',
-    marginBottom: verticalScale(15),
+    marginTop: verticalScale(20),
   },
   resendOtpText: {
     color: Colors.primary,
     fontSize: fontScale(13),
     fontWeight: 'bold',
   },
-  disabledButton: { backgroundColor: '#f0f0f0', borderColor: '#dcdcdc' },
+  disabledButton: {},
   disabledButtonText: { color: '#a0a0a0' },
   otpContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
-    alignSelf: 'center',
   },
   otpBox: {
     width: scale(45),
@@ -528,6 +454,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.backgroundLight,
   },
   otpText: {
     fontSize: fontScale(18),
@@ -539,21 +466,8 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     textAlign: 'center',
     paddingHorizontal: scale(20),
-    marginTop: verticalScale(20),
+    marginTop: verticalScale(25),
     lineHeight: verticalScale(16),
-  },
-  footerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    paddingVertical: verticalScale(10),
-    marginTop: 'auto',
-  },
-  footerItem: { flexDirection: 'row', alignItems: 'center' },
-  footerText: {
-    marginLeft: scale(8),
-    fontSize: fontScale(12),
-    color: Colors.textMuted,
   },
 });
 

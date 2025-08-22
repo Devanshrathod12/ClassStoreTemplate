@@ -20,6 +20,7 @@
     "axios": "^1.11.0",
     "react": "19.1.0",
     "react-native": "0.81.0",
+    "react-native-calendars": "^1.1313.0",
     "react-native-flash-message": "^0.4.2",
     "react-native-gesture-handler": "^2.28.0",
     "react-native-otp-inputs": "^7.4.0",
