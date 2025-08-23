@@ -67,13 +67,12 @@ const DeliveryAddress = ({ route, navigation }) => {
                 state: address.state,
                 pincode: address.pincode,
                 country: address.country,
-                address_type: "Shipping"
+                address_type: "Shipping",
+                fullName: address.fullName,
+                phone: address.phone
             };
 
-            console.log("Submitting Address Payload:", JSON.stringify(payload, null, 2));
-
             const response = await apiPost('/api/v1/address', payload);
-            console.log("Address Saved Response:", JSON.stringify(response, null, 2));
 
             showMessage({
                 message: "Address Saved",
@@ -107,7 +106,7 @@ const DeliveryAddress = ({ route, navigation }) => {
                     <MaterialIcons name="arrow-back" size={scale(24)} color={Colors.textPrimary} />
                 </TouchableOpacity>
                 <View>
-                    <Text style={styles.headerTitle}>Delivery Address</Text>
+                    <Text style={styles.headerTitle}>Add Delivery Address</Text>
                     <Text style={styles.headerSubtitle}>Step 1 of 2</Text>
                 </View>
                 <View style={{width: scale(24)}} />
@@ -190,7 +189,7 @@ const DeliveryAddress = ({ route, navigation }) => {
                         </View>
                         <View style={styles.inputGroup}>
                             <Text style={styles.inputLabel}>Country</Text>
-                            <TextInput style={styles.input} value={address.country} onChangeText={t => setAddress({...address, country: t})} />
+                            <TextInput style={styles.input} value={address.country} editable={false} />
                         </View>
                     </View>
                 </View>
@@ -201,7 +200,7 @@ const DeliveryAddress = ({ route, navigation }) => {
                     {isLoading ? (
                         <ActivityIndicator color={Colors.textLight} />
                     ) : (
-                        <Text style={styles.paymentButtonText}>Continue to Payment</Text>
+                        <Text style={styles.paymentButtonText}>Save and Continue</Text>
                     )}
                 </TouchableOpacity>
             </View>
@@ -210,186 +209,38 @@ const DeliveryAddress = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: Colors.background,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: moderateScale(16),
-        backgroundColor: Colors.backgroundLight,
-    },
-    headerTitle: {
-        fontSize: fontScale(18),
-        fontWeight: 'bold',
-        color: Colors.textPrimary,
-        textAlign: 'center'
-    },
-    headerSubtitle: {
-        fontSize: fontScale(12),
-        color: Colors.textSecondary,
-        textAlign: 'center'
-    },
-    content: {
-        flexGrow: 1,
-        padding: scale(16),
-        backgroundColor: Colors.backgroundLight,
-    },
-    card: {
-        backgroundColor: Colors.WhiteBackgroudcolor,
-        borderRadius: moderateScale(12),
-        padding: moderateScale(14),
-        marginBottom: verticalScale(20),
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: verticalScale(4)
-    },
-    sectionTitle: {
-        fontSize: fontScale(14),
-        fontWeight: 'bold',
-        color: Colors.textDark,
-        marginLeft: scale(8)
-    },
-    sectionSubtitle: {
-        fontSize: fontScale(12),
-        color: Colors.textMuted,
-        marginLeft: scale(26),
-        marginBottom: verticalScale(12)
-    },
-    itemRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: verticalScale(10),
-    },
-    itemDetails: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-    },
-    itemAvatar: {
-        width: scale(32),
-        height: scale(32),
-        borderRadius: moderateScale(8),
-        backgroundColor: Colors.backgroundPrimaryLight,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: scale(10),
-    },
-    itemAvatarText: {
-        fontSize: fontScale(16),
-        fontWeight: 'bold',
-        color: Colors.primary,
-    },
-    itemName: {
-        fontSize: fontScale(14),
-        fontWeight: 'bold',
-        color: Colors.textDark,
-        flexShrink: 1
-    },
-    itemFor: {
-        fontSize: fontScale(12),
-        color: Colors.textSecondary,
-    },
-    itemPrice: {
-        fontSize: fontScale(14),
-        fontWeight: 'bold',
-        color: Colors.textDark,
-        marginLeft: scale(8),
-    },
-    priceBreakdown: {
-        borderTopWidth: 1,
-        borderTopColor: Colors.borderLight,
-        marginTop: verticalScale(10),
-        paddingTop: verticalScale(10),
-    },
-    priceRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: verticalScale(6),
-    },
-    priceLabel: {
-        fontSize: fontScale(13),
-        color: Colors.textSecondary,
-    },
-    priceValue: {
-        fontSize: fontScale(13),
-        color: Colors.textDark,
-    },
-    totalRow: {
-        borderTopWidth: 1,
-        borderTopColor: Colors.borderLight,
-        marginTop: verticalScale(4),
-        paddingTop: verticalScale(10),
-    },
-    totalLabel: {
-        fontSize: fontScale(14),
-        fontWeight: 'bold',
-        color: Colors.textDark,
-    },
-    totalValue: {
-        fontSize: fontScale(14),
-        fontWeight: 'bold',
-        color: Colors.success,
-    },
-    inputRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginHorizontal: -scale(4)
-    },
-    inputGroup: {
-        flex: 1,
-        marginHorizontal: scale(4),
-    },
-    inputGroupFull: {
-        marginHorizontal: scale(4),
-    },
-    inputLabel: {
-        fontSize: fontScale(12),
-        color: Colors.textSecondary,
-        marginBottom: verticalScale(6),
-        marginTop: verticalScale(8),
-    },
-    input: {
-        borderWidth: 1,
-        borderColor: Colors.border,
-        borderRadius: moderateScale(8),
-        paddingHorizontal: scale(12),
-        backgroundColor: Colors.backgroundFaded,
-        fontSize: fontScale(14),
-        color: Colors.textDark,
-        height: verticalScale(45),
-    },
-    footer: {
-        padding: moderateScale(16),
-        backgroundColor: Colors.WhiteBackgroudcolor,
-        borderTopWidth: 1,
-        borderTopColor: Colors.borderLight,
-    },
-    paymentButton: {
-        backgroundColor: Colors.primary,
-        paddingVertical: verticalScale(14),
-        borderRadius: moderateScale(8),
-        alignItems: 'center',
-    },
-    disabledButton: {
-        backgroundColor: Colors.primary,
-        opacity: 0.7,
-    },
-    paymentButtonText: {
-        color: Colors.textLight,
-        fontSize: fontScale(16),
-        fontWeight: 'bold',
-    },
+    container: { flex: 1, backgroundColor: Colors.background },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: moderateScale(16), backgroundColor: Colors.backgroundLight },
+    headerTitle: { fontSize: fontScale(18), fontWeight: 'bold', color: Colors.textPrimary, textAlign: 'center' },
+    headerSubtitle: { fontSize: fontScale(12), color: Colors.textSecondary, textAlign: 'center' },
+    content: { flexGrow: 1, padding: scale(16), backgroundColor: Colors.backgroundLight },
+    card: { backgroundColor: Colors.WhiteBackgroudcolor, borderRadius: moderateScale(12), padding: moderateScale(14), marginBottom: verticalScale(20), elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
+    sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: verticalScale(4) },
+    sectionTitle: { fontSize: fontScale(14), fontWeight: 'bold', color: Colors.textDark, marginLeft: scale(8) },
+    sectionSubtitle: { fontSize: fontScale(12), color: Colors.textMuted, marginLeft: scale(26), marginBottom: verticalScale(12) },
+    itemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: verticalScale(10) },
+    itemDetails: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+    itemAvatar: { width: scale(32), height: scale(32), borderRadius: moderateScale(8), backgroundColor: Colors.backgroundPrimaryLight, justifyContent: 'center', alignItems: 'center', marginRight: scale(10) },
+    itemAvatarText: { fontSize: fontScale(16), fontWeight: 'bold', color: Colors.primary },
+    itemName: { fontSize: fontScale(14), fontWeight: 'bold', color: Colors.textDark, flexShrink: 1 },
+    itemFor: { fontSize: fontScale(12), color: Colors.textSecondary },
+    itemPrice: { fontSize: fontScale(14), fontWeight: 'bold', color: Colors.textDark, marginLeft: scale(8) },
+    priceBreakdown: { borderTopWidth: 1, borderTopColor: Colors.borderLight, marginTop: verticalScale(10), paddingTop: verticalScale(10) },
+    priceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) },
+    priceLabel: { fontSize: fontScale(13), color: Colors.textSecondary },
+    priceValue: { fontSize: fontScale(13), color: Colors.textDark },
+    totalRow: { borderTopWidth: 1, borderTopColor: Colors.borderLight, marginTop: verticalScale(4), paddingTop: verticalScale(10) },
+    totalLabel: { fontSize: fontScale(14), fontWeight: 'bold', color: Colors.textDark },
+    totalValue: { fontSize: fontScale(14), fontWeight: 'bold', color: Colors.success },
+    inputRow: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: -scale(4) },
+    inputGroup: { flex: 1, marginHorizontal: scale(4) },
+    inputGroupFull: { marginHorizontal: scale(4) },
+    inputLabel: { fontSize: fontScale(12), color: Colors.textSecondary, marginBottom: verticalScale(6), marginTop: verticalScale(8) },
+    input: { borderWidth: 1, borderColor: Colors.border, borderRadius: moderateScale(8), paddingHorizontal: scale(12), backgroundColor: Colors.backgroundFaded, fontSize: fontScale(14), color: Colors.textDark, height: verticalScale(45) },
+    footer: { padding: moderateScale(16), backgroundColor: Colors.WhiteBackgroudcolor, borderTopWidth: 1, borderTopColor: Colors.borderLight },
+    paymentButton: { backgroundColor: Colors.primary, paddingVertical: verticalScale(14), borderRadius: moderateScale(8), alignItems: 'center' },
+    disabledButton: { backgroundColor: Colors.primary, opacity: 0.7 },
+    paymentButtonText: { color: Colors.textLight, fontSize: fontScale(16), fontWeight: 'bold' },
 });
 
 export default DeliveryAddress;

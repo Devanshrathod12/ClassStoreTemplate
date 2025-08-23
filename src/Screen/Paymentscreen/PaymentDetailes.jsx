@@ -370,18 +370,17 @@ import { useFocusEffect } from '@react-navigation/native';
 import Colors from '../../styles/colors';
 import { scale, fontScale, verticalScale, moderateScale } from '../../styles/stylesconfig';
 import NavigationString from '../../Navigation/NavigationString';
-import { apiGet, apiPost } from '../../api/api';
+import { apiGet, apiPost, apiDelete } from '../../api/api';
 
 const PaymentDetailes = ({ route, navigation }) => {
-    const { child, pkg, address } = route.params;
+    const { child, pkg } = route.params;
 
     const [isLoading, setIsLoading] = useState(false);
     const [isAddressLoading, setIsAddressLoading] = useState(true);
     
     const [savedAddresses, setSavedAddresses] = useState([]);
-    const [selectedSavedAddress, setSelectedSavedAddress] = useState(address);
-    const [manualInputs, setManualInputs] = useState({ address: '', phone: '', notes: '' });
-    const [addressSource, setAddressSource] = useState('SAVED'); // 'SAVED' or 'NEW'
+    const [selectedSavedAddress, setSelectedSavedAddress] = useState(route.params?.address || null);
+    const [deliveryNotes, setDeliveryNotes] = useState('');
     const [paymentMethod, setPaymentMethod] = useState('COD');
 
     const deliveryFee = 49;
@@ -394,69 +393,98 @@ const PaymentDetailes = ({ route, navigation }) => {
                 setIsAddressLoading(true);
                 try {
                     const userId = await AsyncStorage.getItem('userId');
-                    if (userId) {
-                        const response = await apiGet(`/api/v1/address/user/${userId}`);
-                        if (response && Array.isArray(response) && response.length > 0) {
-                            setSavedAddresses(response);
-                            if (!selectedSavedAddress) {
-                                setSelectedSavedAddress(response[0]);
-                            }
-                        } else {
-                            setAddressSource('NEW');
+                    if (!userId) {
+                        throw new Error("User ID not found");
+                    }
+                    const response = await apiGet(`/api/v1/address/user/${userId}`);
+                    if (response && Array.isArray(response) && response.length > 0) {
+                        setSavedAddresses(response);
+                        if (route.params?.address) {
+                            setSelectedSavedAddress(response.find(a => a.address_id === route.params.address.address_id) || response[0]);
+                        } else if (!selectedSavedAddress) {
+                            setSelectedSavedAddress(response[0]);
                         }
+                    } else {
+                        setSavedAddresses([]);
+                        Alert.alert(
+                            "No Address Found",
+                            "Please add a delivery address to continue.",
+                            [{ text: "OK", onPress: () => navigation.goBack() }]
+                        );
                     }
                 } catch (error) {
                     console.error("Failed to fetch saved addresses:", error);
+                    Alert.alert("Error", "Could not fetch addresses. Please go back and try again.", [{ text: "OK", onPress: () => navigation.goBack() }]);
                 } finally {
                     setIsAddressLoading(false);
                 }
             };
             fetchAddresses();
-        }, [])
+        }, [route.params?.address])
     );
 
     const getInitials = (name) => {
         if (!name) return '';
         return name.charAt(0).toUpperCase();
     };
+    
+    const handleDeleteAddress = (addressIdToDelete) => {
+        Alert.alert(
+            "Delete Address",
+            "Are you sure you want to delete this address?",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            await apiDelete(`/api/v1/address/${addressIdToDelete}`);
+                            showMessage({ message: "Address Deleted Successfully!", type: "success" });
+                            const updatedAddresses = savedAddresses.filter(addr => addr.address_id !== addressIdToDelete);
+                            setSavedAddresses(updatedAddresses);
+
+                            if (selectedSavedAddress?.address_id === addressIdToDelete) {
+                                if (updatedAddresses.length > 0) {
+                                    setSelectedSavedAddress(updatedAddresses[0]);
+                                } else {
+                                    setSelectedSavedAddress(null);
+                                    Alert.alert("No Addresses Left", "All addresses have been deleted. Please add a new one.", [
+                                        { text: "OK", onPress: () => navigation.goBack() }
+                                    ]);
+                                }
+                            }
+                        } catch (error) {
+                            console.error("Failed to delete address:", error.response?.data || error);
+                            showMessage({ message: "Error", description: "Could not delete address. Please try again.", type: "danger" });
+                        }
+                    },
+                },
+            ]
+        );
+    };
 
     const handlePlaceOrder = async () => {
-        setIsLoading(true);
-        let payload;
-
-        if (addressSource === 'SAVED') {
-            if (!selectedSavedAddress) {
-                Alert.alert("Missing Information", "Please select a saved delivery address.");
-                setIsLoading(false);
-                return;
-            }
-            const fullAddressString = `${selectedSavedAddress.address_line1}, ${selectedSavedAddress.address_line2 || ''}, ${selectedSavedAddress.city}, ${selectedSavedAddress.state} - ${selectedSavedAddress.pincode}`;
-            payload = {
-                delivery_address: fullAddressString,
-                delivery_phone: selectedSavedAddress.phone || address.phone,
-                delivery_notes: manualInputs.notes,
-                payment_method: paymentMethod
-            };
-        } else {
-            if (!manualInputs.address || !manualInputs.phone) {
-                Alert.alert("Missing Information", "Please enter a delivery address and phone number.");
-                setIsLoading(false);
-                return;
-            }
-            payload = {
-                delivery_address: manualInputs.address,
-                delivery_phone: manualInputs.phone,
-                delivery_notes: manualInputs.notes,
-                payment_method: paymentMethod
-            };
+        if (!selectedSavedAddress) {
+            Alert.alert("Missing Information", "Please select a delivery address to place the order.");
+            return;
         }
 
+        setIsLoading(true);
+        
+        const fullAddressString = `${selectedSavedAddress.address_line1}, ${selectedSavedAddress.address_line2 || ''}, ${selectedSavedAddress.city}, ${selectedSavedAddress.state} - ${selectedSavedAddress.pincode}`;
+        
+        const payload = {
+            delivery_address: fullAddressString,
+            delivery_phone: selectedSavedAddress.phone,
+            delivery_notes: deliveryNotes,
+            payment_method: paymentMethod
+        };
+
         try {
-            console.log("Placing Order with Payload:", JSON.stringify(payload, null, 2));
-            const response = await apiPost('/api/v1/orders', payload);
-            console.log("Order Placed Response:", JSON.stringify(response, null, 2));
+            await apiPost('/api/v1/orders', payload);
             showMessage({ message: "Order Placed Successfully!", type: "success" });
-            navigation.navigate(NavigationString.Order, { orderDetails: response });
+            navigation.navigate(NavigationString.Order);
 
         } catch (error) {
             console.error("Failed to place order:", error.response?.data || error);
@@ -499,41 +527,26 @@ const PaymentDetailes = ({ route, navigation }) => {
                 </View>
 
                 <View style={styles.card}>
-                    <Text style={styles.sectionTitle}>Shipping Details</Text>
-
-                    <TouchableOpacity style={styles.addressSourceOption} onPress={() => setAddressSource('SAVED')}>
-                        <MaterialCommunityIcons name={addressSource === 'SAVED' ? 'radiobox-marked' : 'radiobox-blank'} size={scale(20)} color={Colors.primary} />
-                        <Text style={styles.addressSourceText}>Use a saved address</Text>
-                    </TouchableOpacity>
-
-                    {addressSource === 'SAVED' && (
-                        isAddressLoading ? <ActivityIndicator style={{marginVertical: 10}}/> :
-                        <View style={styles.subContainer}>
-                            {savedAddresses.map(addr => (
-                                <TouchableOpacity key={addr.address_id} style={styles.addressOption} onPress={() => setSelectedSavedAddress(addr)}>
-                                    <MaterialCommunityIcons name={selectedSavedAddress?.address_id === addr.address_id ? 'circle-slice-8' : 'circle-outline'} size={scale(18)} color={Colors.primary} />
+                    <Text style={styles.sectionTitle}>Select Shipping Address</Text>
+                    
+                    {isAddressLoading ? <ActivityIndicator style={{marginVertical: 10}}/> :
+                        savedAddresses.map(addr => (
+                            <View key={addr.address_id} style={styles.addressOptionContainer}>
+                                <TouchableOpacity style={styles.addressOption} onPress={() => setSelectedSavedAddress(addr)}>
+                                    <MaterialCommunityIcons name={selectedSavedAddress?.address_id === addr.address_id ? 'radiobox-marked' : 'radiobox-blank'} size={scale(20)} color={Colors.primary} />
                                     <View style={{marginLeft: scale(10), flex: 1}}>
                                         <Text style={styles.addressOptionName}>{addr.fullName || child.name}</Text>
                                         <Text style={styles.addressOptionText}>{formatAddress(addr)}</Text>
                                     </View>
                                 </TouchableOpacity>
-                            ))}
-                        </View>
-                    )}
+                                <TouchableOpacity onPress={() => handleDeleteAddress(addr.address_id)}>
+                                    <MaterialCommunityIcons name="trash-can-outline" size={scale(22)} color={Colors.danger} />
+                                </TouchableOpacity>
+                            </View>
+                        ))
+                    }
 
-                    <TouchableOpacity style={styles.addressSourceOption} onPress={() => setAddressSource('NEW')}>
-                        <MaterialCommunityIcons name={addressSource === 'NEW' ? 'radiobox-marked' : 'radiobox-blank'} size={scale(20)} color={Colors.primary} />
-                        <Text style={styles.addressSourceText}>Enter a new address</Text>
-                    </TouchableOpacity>
-                    
-                    {addressSource === 'NEW' && (
-                        <View style={styles.subContainer}>
-                            <TextInput style={styles.input} placeholder="Delivery Address (House, Street, Area)" value={manualInputs.address} onChangeText={t => setManualInputs({...manualInputs, address: t})} />
-                            <TextInput style={styles.input} placeholder="Delivery Phone Number" value={manualInputs.phone} onChangeText={t => setManualInputs({...manualInputs, phone: t})} keyboardType="phone-pad" maxLength={10} />
-                        </View>
-                    )}
-
-                    <TextInput style={styles.notesInput} placeholder="Delivery Notes (Optional)" value={manualInputs.notes} onChangeText={t => setManualInputs({...manualInputs, notes: t})} />
+                    <TextInput style={styles.notesInput} placeholder="Delivery Notes (Optional)" value={deliveryNotes} onChangeText={setDeliveryNotes} />
                 </View>
 
                 <View style={styles.card}>
@@ -559,129 +572,33 @@ const PaymentDetailes = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: Colors.background,
-    },
-    header: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        padding: moderateScale(16), backgroundColor: Colors.backgroundLight,
-    },
-    headerTitle: {
-        fontSize: fontScale(18), fontWeight: 'bold', color: Colors.textPrimary,
-    },
-    content: {
-        flexGrow: 1, padding: scale(16), backgroundColor: Colors.backgroundLight,
-    },
-    card: {
-        backgroundColor: Colors.WhiteBackgroudcolor, borderRadius: moderateScale(12),
-        padding: moderateScale(14), marginBottom: verticalScale(20), elevation: 2,
-    },
-    sectionTitle: {
-        fontSize: fontScale(15), fontWeight: 'bold', color: Colors.textDark, marginBottom: verticalScale(12)
-    },
-    itemRow: {
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    },
-    itemDetails: {
-        flexDirection: 'row', alignItems: 'center', flex: 1,
-    },
-    itemAvatar: {
-        width: scale(32), height: scale(32), borderRadius: moderateScale(8),
-        backgroundColor: Colors.backgroundPrimaryLight, justifyContent: 'center', alignItems: 'center',
-        marginRight: scale(10),
-    },
-    itemAvatarText: {
-        fontSize: fontScale(16), fontWeight: 'bold', color: Colors.primary,
-    },
-    itemName: {
-        fontSize: fontScale(14), fontWeight: 'bold', color: Colors.textDark, flexShrink: 1,
-    },
-    itemFor: {
-        fontSize: fontScale(12), color: Colors.textSecondary,
-    },
-    itemPrice: {
-        fontSize: fontScale(14), fontWeight: 'bold', color: Colors.textDark,
-    },
-    addressSourceOption: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: verticalScale(8)
-    },
-    addressSourceText: {
-        fontSize: fontScale(14),
-        color: Colors.textDark,
-        marginLeft: scale(12),
-        fontWeight: '500'
-    },
-    subContainer: {
-        paddingLeft: scale(32),
-        paddingBottom: verticalScale(10),
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.borderLight,
-        marginBottom: verticalScale(10),
-    },
-    addressOption: {
-        flexDirection: 'row',
-        paddingVertical: verticalScale(8),
-    },
-    addressOptionName: {
-        fontSize: fontScale(13),
-        fontWeight: 'bold',
-        color: Colors.textDark,
-    },
-    addressOptionText: {
-        fontSize: fontScale(13),
-        color: Colors.textSecondary,
-    },
-    input: {
-        borderWidth: 1, borderColor: Colors.border, borderRadius: moderateScale(8),
-        paddingHorizontal: scale(12), backgroundColor: Colors.backgroundFaded,
-        fontSize: fontScale(14), color: Colors.textDark,
-        height: verticalScale(45),
-        marginTop: verticalScale(10)
-    },
-    notesInput: {
-        borderWidth: 1, borderColor: Colors.border, borderRadius: moderateScale(8),
-        paddingHorizontal: scale(12), backgroundColor: Colors.backgroundFaded,
-        fontSize: fontScale(14), color: Colors.textDark,
-        height: verticalScale(45), marginTop: verticalScale(10),
-    },
-    paymentOption: {
-        flexDirection: 'row', alignItems: 'center', paddingVertical: verticalScale(8),
-    },
-    paymentTitle: {
-        fontSize: fontScale(14), fontWeight: '500', color: Colors.textDark, marginLeft: scale(12),
-    },
-    footer: {
-        padding: moderateScale(16), backgroundColor: Colors.WhiteBackgroudcolor,
-        borderTopWidth: 1, borderTopColor: Colors.borderLight,
-    },
-    totalRowFooter: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: verticalScale(12),
-    },
-    totalLabel: {
-        fontSize: fontScale(14),
-        fontWeight: 'bold',
-        color: Colors.textDark,
-    },
-    totalValue: {
-        fontSize: fontScale(16),
-        fontWeight: 'bold',
-        color: Colors.success,
-    },
-    placeOrderButton: {
-        backgroundColor: Colors.button, paddingVertical: verticalScale(14),
-        borderRadius: moderateScale(8), alignItems: 'center',
-    },
-    disabledButton: {
-        backgroundColor: Colors.button, opacity: 0.7,
-    },
-    placeOrderButtonText: {
-        color: Colors.textLight, fontSize: fontScale(16), fontWeight: 'bold',
-    },
+    container: { flex: 1, backgroundColor: Colors.background },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: moderateScale(16), backgroundColor: Colors.backgroundLight },
+    headerTitle: { fontSize: fontScale(18), fontWeight: 'bold', color: Colors.textPrimary },
+    content: { flexGrow: 1, padding: scale(16), backgroundColor: Colors.backgroundLight },
+    card: { backgroundColor: Colors.WhiteBackgroudcolor, borderRadius: moderateScale(12), padding: moderateScale(14), marginBottom: verticalScale(20), elevation: 2 },
+    sectionTitle: { fontSize: fontScale(15), fontWeight: 'bold', color: Colors.textDark, marginBottom: verticalScale(12) },
+    itemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    itemDetails: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+    itemAvatar: { width: scale(32), height: scale(32), borderRadius: moderateScale(8), backgroundColor: Colors.backgroundPrimaryLight, justifyContent: 'center', alignItems: 'center', marginRight: scale(10) },
+    itemAvatarText: { fontSize: fontScale(16), fontWeight: 'bold', color: Colors.primary },
+    itemName: { fontSize: fontScale(14), fontWeight: 'bold', color: Colors.textDark, flexShrink: 1 },
+    itemFor: { fontSize: fontScale(12), color: Colors.textSecondary },
+    itemPrice: { fontSize: fontScale(14), fontWeight: 'bold', color: Colors.textDark },
+    addressOptionContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: Colors.borderLight, paddingVertical: verticalScale(8) },
+    addressOption: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: scale(10) },
+    addressOptionName: { fontSize: fontScale(13), fontWeight: 'bold', color: Colors.textDark },
+    addressOptionText: { fontSize: fontScale(13), color: Colors.textSecondary },
+    notesInput: { borderWidth: 1, borderColor: Colors.border, borderRadius: moderateScale(8), paddingHorizontal: scale(12), backgroundColor: Colors.backgroundFaded, fontSize: fontScale(14), color: Colors.textDark, height: verticalScale(45), marginTop: verticalScale(15) },
+    paymentOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: verticalScale(8) },
+    paymentTitle: { fontSize: fontScale(14), fontWeight: '500', color: Colors.textDark, marginLeft: scale(12) },
+    footer: { padding: moderateScale(16), backgroundColor: Colors.WhiteBackgroudcolor, borderTopWidth: 1, borderTopColor: Colors.borderLight },
+    totalRowFooter: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(12) },
+    totalLabel: { fontSize: fontScale(14), fontWeight: 'bold', color: Colors.textDark },
+    totalValue: { fontSize: fontScale(16), fontWeight: 'bold', color: Colors.success },
+    placeOrderButton: { backgroundColor: Colors.primary, paddingVertical: verticalScale(14), borderRadius: moderateScale(8), alignItems: 'center' },
+    disabledButton: { backgroundColor: Colors.primary, opacity: 0.7 },
+    placeOrderButtonText: { color: Colors.textLight, fontSize: fontScale(16), fontWeight: 'bold' },
 });
 
 export default PaymentDetailes;
