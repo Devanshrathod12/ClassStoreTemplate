@@ -163,9 +163,9 @@ const YourChildrenScreen = ({ route, navigation }) => {
             <StatusBar barStyle="dark-content" backgroundColor={Colors.backgroundLight} />
             <ScrollView contentContainerStyle={styles.content}>
                 <View style={styles.headerContainer}>
-                    <View style={styles.logoContainer}>
+                    {/* <View style={styles.logoContainer}>
                         <MaterialCommunityIcons name="book-open-variant" size={scale(28)} color={Colors.textLight} />
-                    </View>
+                    </View> */}
                     <Text style={styles.appName}>ClassStore</Text>
                 </View>
                 
@@ -196,7 +196,12 @@ const YourChildrenScreen = ({ route, navigation }) => {
                             <Text style={styles.exploreItemText}>My Cart</Text>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => navigation.navigate("MyOrders")} style={styles.exploreItem}>
-                            <MaterialCommunityIcons name="receipt-text-outline" size={scale(20)} color={Colors.textSecondary} />
+                        <MaterialCommunityIcons 
+  name="package-variant-closed" 
+  size={scale(20)} 
+  color={Colors.textSecondary} 
+/>
+
                             <Text style={styles.exploreItemText}>My Orders</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.exploreItem, {borderBottomWidth: 0}]}>

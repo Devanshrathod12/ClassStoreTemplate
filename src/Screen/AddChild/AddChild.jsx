@@ -1,11 +1,10 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   KeyboardAvoidingView,
   Platform,
@@ -14,8 +13,8 @@ import {
   FlatList,
   ActivityIndicator,
   Alert,
+  Keyboard,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { showMessage } from 'react-native-flash-message';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -30,7 +29,7 @@ import {
 } from '../../styles/stylesconfig';
 import NavigationString from '../../Navigation/NavigationString';
 import { apiGet, apiPost, apiDelete } from '../../api/api';
-import AdaptiveSafeAreaView from "../AdaptiveSafeAreaView"
+import AdaptiveSafeAreaView from "../AdaptiveSafeAreaView";
 
 const AddChildScreen = ({ route, navigation, onLogout }) => {
   const [localChildren, setLocalChildren] = useState([]);
@@ -43,7 +42,6 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
   const [classOptionsFromApi, setClassOptionsFromApi] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState(null);
-
   const [isCalendarVisible, setCalendarVisible] = useState(false);
   const [datePickerIndex, setDatePickerIndex] = useState(null);
   const [pickerMode, setPickerMode] = useState('day');
@@ -175,6 +173,7 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
     newChildren[datePickerIndex].dob = formattedDate;
     setLocalChildren(newChildren);
     setCalendarVisible(false);
+    Keyboard.dismiss();
   };
 
   const handleYearSelect = (year) => {
@@ -218,6 +217,7 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
       setLocalChildren(newChildren);
     }
     setDropdownVisible(false);
+    Keyboard.dismiss();
   };
 
   const handleSaveAndContinue = async () => {
@@ -400,11 +400,7 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.headerContainer}>
-            <View style={styles.logoContainer}>
-              <MaterialCommunityIcons name="book-open-variant" size={scale(35)} color={Colors.textLight} />
-            </View>
-            <Text style={styles.title}>{isEditMode ? 'Edit Children' : 'Almost There!'}</Text>
-            <Text style={styles.subtitle}>{isEditMode ? 'Manage your children’s information' : 'Tell us about your children to personalize their learning'}</Text>
+            <Text style={styles.Topsubtitle}>{isEditMode ? 'Manage your children’s information' : 'Tell us about your children to personalize their learning'}</Text>
           </View>
 
           <View style={styles.formContainer}>
@@ -488,9 +484,9 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
                 <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
                   <Text style={styles.skipButtonText}>Skip</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={onLogout}>
+                {/* <TouchableOpacity onPress={onLogout}>
                   <Text>Log Out</Text>
-                </TouchableOpacity>
+                </TouchableOpacity> */}
               </View>
             </View>
           </View>
@@ -513,24 +509,10 @@ const styles = StyleSheet.create({
     paddingBottom: verticalScale(30),
   },
   headerContainer: { alignItems: 'center', marginTop: verticalScale(15) },
-  logoContainer: {
-    width: scale(60),
-    height: scale(60),
-    borderRadius: moderateScale(16),
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: verticalScale(15),
-  },
-  title: {
-    fontSize: fontScale(24),
-    fontWeight: 'bold',
-    color: Colors.textPrimary,
-  },
-  subtitle: {
+  Topsubtitle: {
     fontSize: fontScale(14),
     color: Colors.textSecondary,
-    marginTop: verticalScale(5),
+    marginTop: verticalScale(10),
     textAlign: 'center',
     paddingHorizontal: scale(20),
   },

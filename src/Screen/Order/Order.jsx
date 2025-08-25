@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { showMessage } from 'react-native-flash-message';
 import Colors from '../../styles/colors';
@@ -9,12 +9,12 @@ import { apiPost } from '../../api/api';
 import AdaptiveSafeAreaView from '../AdaptiveSafeAreaView';
 
 const Order = ({ route, navigation }) => {
-    const { orderData, address, total, paymentMethod, orderDetails } = route.params || {};
+    const { orderData, address, total, paymentMethod, orderDetails, deliveryPhoneNumber } = route.params || {};
     const [status, setStatus] = useState('confirming');
 
     const handleConfirmOrder = async () => {
         if (!orderDetails?.order_id) {
-            Alert.alert("Error", "Order ID is missing.");
+            showMessage({ message: "Error", description: "Order ID is missing.", type: "danger" });
             return;
         }
         setStatus('loading');
@@ -31,7 +31,7 @@ const Order = ({ route, navigation }) => {
 
     const handleCancelOrder = async () => {
         if (!orderDetails?.order_id) {
-            Alert.alert("Error", "Order ID is missing.");
+            showMessage({ message: "Error", description: "Order ID is missing.", type: "danger" });
             return;
         }
         setStatus('loading');
@@ -107,7 +107,7 @@ const Order = ({ route, navigation }) => {
                         <Text style={styles.addressName}>{address.fullName}</Text>
                         <Text style={styles.addressText}>{address.address_line1}, {address.address_line2}</Text>
                         <Text style={styles.addressText}>{address.city}, {address.state} - {address.pincode}</Text>
-                        <Text style={styles.addressText}>Phone: +91 {address.phone}</Text>
+                        <Text style={styles.addressText}>Phone: {deliveryPhoneNumber}</Text>
                     </View>
                     <View style={styles.totalSection}>
                         <View><Text style={styles.totalLabel}>Total Paid:</Text><Text style={styles.paymentMethod}>Payment Method: {paymentMethod}</Text></View>

@@ -8,7 +8,8 @@ import {
   StatusBar,
   TouchableOpacity,
 } from 'react-native';
-import { apiGet } from '../../api/api';
+import FlashMessage, { showMessage } from "react-native-flash-message";
+import { apiGet, apiPost } from '../../api/api';
 import Colors from '../../styles/colors';
 import {
   scale,
@@ -25,53 +26,70 @@ const OrderDetailScreen = ({ route, navigation }) => {
   const [orderDetails, setOrderDetails] = useState(null);
   const [orderItems, setOrderItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  const fetchOrderData = async () => {
+    if (!orderId) return;
+    try {
+      setIsLoading(true);
+      const detailsPromise = apiGet(`/api/v1/orders/${orderId}`);
+      const itemsPromise = apiGet(`/api/v1/orders/${orderId}/items`);
+      const [detailsData, itemsData] = await Promise.all([
+        detailsPromise,
+        itemsPromise,
+      ]);
+      setOrderDetails(detailsData);
+      setOrderItems(itemsData || []);
+    } catch (error) {
+      console.log(`Failed to fetch data for order ${orderId}:`, error);
+      showMessage({
+        message: "Error Loading Data",
+        description: "Could not fetch order details. Please try again.",
+        type: "danger",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchOrderData = async () => {
-      if (!orderId) return;
-      try {
-        setIsLoading(true);
-        const detailsPromise = apiGet(`/api/v1/orders/${orderId}`);
-        const itemsPromise = apiGet(`/api/v1/orders/${orderId}/items`);
-        const [detailsData, itemsData] = await Promise.all([
-          detailsPromise,
-          itemsPromise,
-        ]);
-        setOrderDetails(detailsData);
-        setOrderItems(itemsData || []);
-      } catch (error) {
-        console.log(`Failed to fetch data for order ${orderId}:`, error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchOrderData();
   }, [orderId]);
+
+  const handleCancelOrder = async () => {
+    setIsCancelling(true);
+    try {
+      const updatedOrder = await apiPost(`/api/v1/orders/${orderId}/cancel`);
+      setOrderDetails(updatedOrder);
+      showMessage({
+        message: "Order Cancelled",
+        description: "Your order has been successfully cancelled.",
+        type: "success",
+      });
+    } catch (error) {
+      console.error("Failed to cancel order:", error);
+      showMessage({
+        message: "Cancellation Failed",
+        description: "We could not cancel your order. Please try again later.",
+        type: "danger",
+      });
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   const getStatusStyle = status => {
     switch (status) {
       case 'CONFIRMED':
-        return {
-          backgroundColor: Colors.backgroundSuccess,
-          color: Colors.success,
-        };
+        return { backgroundColor: Colors.backgroundSuccess, color: Colors.success };
       case 'SHIPPED':
         return { backgroundColor: Colors.backgroundInfo, color: Colors.info };
       case 'DELIVERED':
-        return {
-          backgroundColor: Colors.backgroundPrimaryLight,
-          color: Colors.primary,
-        };
+        return { backgroundColor: Colors.backgroundPrimaryLight, color: Colors.primary };
       case 'CANCELLED':
-        return {
-          backgroundColor: Colors.backgroundDanger,
-          color: Colors.danger,
-        };
+        return { backgroundColor: Colors.backgroundDanger, color: Colors.danger };
       default:
-        return {
-          backgroundColor: Colors.background,
-          color: Colors.textSecondary,
-        };
+        return { backgroundColor: Colors.background, color: Colors.textSecondary };
     }
   };
 
@@ -86,22 +104,39 @@ const OrderDetailScreen = ({ route, navigation }) => {
 
   const renderOrderItem = item => (
     <View key={item.order_item_id} style={styles.itemCard}>
-      <View style={styles.itemInfo}>
-        <Text style={styles.itemName} numberOfLines={2}>
-          {item.bundle_name}
-        </Text>
-        <Text style={styles.itemQuantity}>Quantity: {item.quantity}</Text>
-      </View>
-      <Text style={styles.itemPrice}>₹{parseFloat(item.total).toFixed(2)}</Text>
+        <View style={styles.itemHeader}>
+            <Text style={styles.itemName} numberOfLines={2}>{item.bundle_name}</Text>
+            <Text style={styles.itemTotal}>₹{parseFloat(item.total).toFixed(2)}</Text>
+        </View>
+        <Text style={styles.itemBundleId}>Bundle ID: {item.bundle_id}</Text>
+        
+        <View style={styles.separator} />
+        
+        <View style={styles.itemPricingDetails}>
+            <View style={styles.itemPriceRow}>
+                <Text style={styles.itemPriceLabel}>Unit Price</Text>
+                <Text style={styles.itemPriceValue}>₹{parseFloat(item.unit_price).toFixed(2)}</Text>
+            </View>
+             <View style={styles.itemPriceRow}>
+                <Text style={styles.itemPriceLabel}>Quantity</Text>
+                <Text style={styles.itemPriceValue}>{item.quantity}</Text>
+            </View>
+            {parseFloat(item.discount_amount) > 0 && (
+                <View style={styles.itemPriceRow}>
+                    <Text style={[styles.itemPriceLabel, {color: Colors.success}]}>Discount</Text>
+                    <Text style={[styles.itemPriceValue, {color: Colors.success}]}>
+                        - ₹{parseFloat(item.discount_amount).toFixed(2)} ({item.discount_percentage}%)
+                    </Text>
+                </View>
+            )}
+        </View>
     </View>
   );
 
   if (isLoading) {
     return (
       <AdaptiveSafeAreaView style={styles.safeArea}>
-        <View style={styles.centeredView}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-        </View>
+        <View style={styles.centeredView}><ActivityIndicator size="large" color={Colors.primary} /></View>
       </AdaptiveSafeAreaView>
     );
   }
@@ -109,9 +144,7 @@ const OrderDetailScreen = ({ route, navigation }) => {
   if (!orderDetails) {
     return (
       <AdaptiveSafeAreaView style={styles.safeArea}>
-        <View style={styles.centeredView}>
-          <Text style={styles.emptyText}>Could not load order details.</Text>
-        </View>
+        <View style={styles.centeredView}><Text style={styles.emptyText}>Could not load order details.</Text></View>
       </AdaptiveSafeAreaView>
     );
   }
@@ -121,111 +154,79 @@ const OrderDetailScreen = ({ route, navigation }) => {
   return (
     <AdaptiveSafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <StatusBar
-          barStyle="dark-content"
-          backgroundColor={Colors.backgroundLight}
-        />
+        <StatusBar barStyle="dark-content" backgroundColor={Colors.backgroundLight} />
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <MaterialIcons
-              name="arrow-back"
-              size={scale(24)}
-              color={Colors.textPrimary}
-            />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Order Details</Text>
-          <View style={{ width: scale(24) }} />
+            <TouchableOpacity onPress={() => navigation.goBack()}>
+                <MaterialIcons name="arrow-back" size={scale(24)} color={Colors.textPrimary} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Order Details</Text>
+            <View style={{ width: scale(24) }} />
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.statusBanner}>
-            <Text style={styles.orderNumber}>
-              Order #{orderDetails.order_number}
-            </Text>
-            <View
-              style={[
-                styles.statusBadge,
-                { backgroundColor: statusStyle.backgroundColor },
-              ]}
-            >
-              <Text style={[styles.statusText, { color: statusStyle.color }]}>
-                {orderDetails.order_status}
-              </Text>
+            <Text style={styles.orderNumber}>Order #{orderDetails.order_number}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: statusStyle.backgroundColor }]}>
+                <Text style={[styles.statusText, { color: statusStyle.color }]}>{orderDetails.order_status}</Text>
             </View>
           </View>
-
+          
           <View style={styles.mainCard}>
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <MaterialCommunityIcons
-                  name="package-variant-closed"
-                  size={scale(20)}
-                  color={Colors.primary}
-                />
+                <MaterialCommunityIcons name="package-variant-closed" size={scale(20)} color={Colors.primary}/>
                 <Text style={styles.sectionTitle}>Items Ordered</Text>
               </View>
               {orderItems.length > 0 ? (
                 orderItems.map(renderOrderItem)
               ) : (
-                <Text style={styles.emptyText}>
-                  No items found for this order.
-                </Text>
+                <Text style={styles.emptyText}>No items found for this order.</Text>
               )}
             </View>
 
-            <View style={styles.separator} />
-
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <MaterialCommunityIcons
-                  name="truck-delivery-outline"
-                  size={scale(20)}
-                  color={Colors.primary}
-                />
-                <Text style={styles.sectionTitle}>Delivery Information</Text>
+             <View style={styles.separator} />
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <MaterialCommunityIcons name="truck-delivery-outline" size={scale(20)} color={Colors.primary}/>
+                  <Text style={styles.sectionTitle}>Delivery Information</Text>
+                </View>
+                <Text style={styles.addressText}>{orderDetails.delivery_address}</Text>
+                <Text style={styles.phoneText}>Phone: {orderDetails.delivery_phone}</Text>
               </View>
-              <Text style={styles.addressText}>
-                {orderDetails.delivery_address}
-              </Text>
-              <Text style={styles.phoneText}>
-                Phone: {orderDetails.delivery_phone}
-              </Text>
-            </View>
 
-            <View style={styles.separator} />
+              <View style={styles.separator} />
 
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <MaterialCommunityIcons
-                  name="credit-card-outline"
-                  size={scale(20)}
-                  color={Colors.primary}
-                />
-                <Text style={styles.sectionTitle}>Payment Summary</Text>
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <MaterialCommunityIcons name="credit-card-outline" size={scale(20)} color={Colors.primary}/>
+                  <Text style={styles.sectionTitle}>Payment Summary</Text>
+                </View>
+                <PriceRow label="Subtotal" value={parseFloat(orderDetails.subtotal || 0).toFixed(2)}/>
+                <PriceRow label="Discount" value={parseFloat(orderDetails.discount_amount || 0).toFixed(2)} isNegative/>
+                <Text style={styles.paymentMethod}>Paid via {orderDetails.payment_method}</Text>
+                <View style={styles.totalRow}>
+                  <Text style={styles.totalLabel}>Grand Total</Text>
+                  <Text style={styles.totalValue}>₹{parseFloat(orderDetails.total_amount).toFixed(2)}</Text>
+                </View>
               </View>
-              <PriceRow
-                label="Subtotal"
-                value={parseFloat(orderDetails.subtotal || 0).toFixed(2)}
-              />
-              <PriceRow
-                label="Discount"
-                value={parseFloat(orderDetails.discount_amount || 0).toFixed(2)}
-                isNegative
-              />
-              <Text style={styles.paymentMethod}>
-                Paid via {orderDetails.payment_method}
-              </Text>
-
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Grand Total</Text>
-                <Text style={styles.totalValue}>
-                  ₹{parseFloat(orderDetails.total_amount).toFixed(2)}
-                </Text>
-              </View>
-            </View>
           </View>
+          
+          {orderDetails.order_status === 'CONFIRMED' && (
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={handleCancelOrder}
+              disabled={isCancelling}
+            >
+              {isCancelling ? (
+                <ActivityIndicator color={Colors.WhiteBackgroudcolor} />
+              ) : (
+                <Text style={styles.cancelButtonText}>Cancel Order</Text>
+              )}
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </View>
+      <FlashMessage position="top" />
     </AdaptiveSafeAreaView>
   );
 };
@@ -285,10 +286,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.WhiteBackgroudcolor,
     borderRadius: moderateScale(12),
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
   },
   section: { padding: moderateScale(14) },
   sectionHeader: {
@@ -303,33 +300,54 @@ const styles = StyleSheet.create({
     marginLeft: scale(10),
   },
   itemCard: {
+    backgroundColor: Colors.backgroundLight,
+    borderRadius: moderateScale(10),
+    padding: moderateScale(12),
+    marginBottom: verticalScale(10),
+  },
+  itemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: verticalScale(10),
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    alignItems: 'flex-start',
   },
-  itemInfo: { flex: 1, marginRight: scale(10) },
   itemName: {
     fontSize: fontScale(14),
     fontWeight: 'bold',
     color: Colors.textDark,
+    flex: 1,
   },
-  itemQuantity: {
-    fontSize: fontScale(12),
-    color: Colors.textSecondary,
-    marginTop: verticalScale(2),
+  itemTotal: {
+      fontSize: fontScale(14),
+      fontWeight: 'bold',
+      color: Colors.textPrimary,
+      marginLeft: scale(8),
   },
-  itemPrice: {
-    fontSize: fontScale(14),
-    fontWeight: '500',
-    color: Colors.textDark,
+  itemBundleId: {
+      fontSize: fontScale(11),
+      color: Colors.textMuted,
+      marginTop: verticalScale(2),
+  },
+  itemPricingDetails: {
+      marginTop: verticalScale(8),
+  },
+  itemPriceRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: verticalScale(4),
+  },
+  itemPriceLabel: {
+      fontSize: fontScale(13),
+      color: Colors.textSecondary,
+  },
+  itemPriceValue: {
+      fontSize: fontScale(13),
+      color: Colors.textDark,
+      fontWeight: '500',
   },
   separator: {
     height: 1,
     backgroundColor: Colors.borderLight,
-    marginHorizontal: moderateScale(14),
+    marginVertical: verticalScale(10),
   },
   addressText: {
     fontSize: fontScale(14),
@@ -381,5 +399,19 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     alignSelf: 'center',
     paddingVertical: verticalScale(10),
+  },
+  cancelButton: {
+    marginTop: verticalScale(20),
+    backgroundColor: Colors.danger,
+    paddingVertical: verticalScale(14),
+    borderRadius: moderateScale(12),
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+  },
+  cancelButtonText: {
+    color: Colors.WhiteBackgroudcolor,
+    fontSize: fontScale(16),
+    fontWeight: 'bold',
   },
 });

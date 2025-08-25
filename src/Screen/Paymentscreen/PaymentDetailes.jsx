@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   TextInput,
-  Alert,
 } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -31,17 +30,11 @@ const PaymentDetailes = ({ route, navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [savedAddresses, setSavedAddresses] = useState([]);
-  const [selectedSavedAddress, setSelectedSavedAddress] = useState(
-    initialAddress || null,
-  );
+  const [selectedSavedAddress, setSelectedSavedAddress] = useState(initialAddress || null);
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('COD');
 
-  const subtotal = orderData
-    ? orderData.isFromCart
-      ? parseFloat(orderData.cart.total_amount)
-      : orderData.pkg.price
-    : 0;
+  const subtotal = orderData ? (orderData.isFromCart ? parseFloat(orderData.cart.total_amount) : orderData.pkg.price) : 0;
   const deliveryFee = 49;
   const total = subtotal + deliveryFee;
 
@@ -58,9 +51,7 @@ const PaymentDetailes = ({ route, navigation }) => {
           if (response && Array.isArray(response) && response.length > 0) {
             setSavedAddresses(response);
             if (selectedSavedAddress) {
-              const stillExists = response.some(
-                a => a.address_id === selectedSavedAddress.address_id,
-              );
+              const stillExists = response.some(a => a.address_id === selectedSavedAddress.address_id);
               if (!stillExists) {
                 setSelectedSavedAddress(response[0]);
               }
@@ -70,23 +61,21 @@ const PaymentDetailes = ({ route, navigation }) => {
           } else {
             setSavedAddresses([]);
             setSelectedSavedAddress(null);
-            Alert.alert(
-              'No Address Found',
-              'Please add a delivery address to continue.',
-              [
-                {
-                  text: 'OK',
-                  onPress: () =>
-                    navigation.navigate(NavigationString.DeliveryAddress),
-                },
-              ],
-            );
+            showMessage({
+              message: 'No Address Found',
+              description: 'Please add a delivery address to continue.',
+              type: 'warning',
+            });
+            navigation.navigate(NavigationString.DeliveryAddress);
           }
         } catch (error) {
           console.error('Failed to fetch addresses:', error);
-          Alert.alert('Error', 'Could not fetch addresses.', [
-            { text: 'OK', onPress: () => navigation.goBack() },
-          ]);
+          showMessage({
+            message: 'Error',
+            description: 'Could not fetch addresses.',
+            type: 'danger',
+          });
+          navigation.goBack();
         } finally {
           setIsDataLoading(false);
         }
@@ -97,7 +86,7 @@ const PaymentDetailes = ({ route, navigation }) => {
       } else {
         setIsDataLoading(false);
       }
-    }, [orderData]),
+    }, [orderData])
   );
 
   const getInitials = name => {
@@ -105,56 +94,57 @@ const PaymentDetailes = ({ route, navigation }) => {
     return name.charAt(0).toUpperCase();
   };
 
-  const handleDeleteAddress = addressIdToDelete => {
-    Alert.alert('Delete Address', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await apiDelete(`/api/v1/address/${addressIdToDelete}`);
-            showMessage({ message: 'Address Deleted', type: 'success' });
-            const updatedAddresses = savedAddresses.filter(
-              addr => addr.address_id !== addressIdToDelete,
-            );
-            setSavedAddresses(updatedAddresses);
+  const handleDeleteAddress = async addressIdToDelete => {
+    try {
+      await apiDelete(`/api/v1/address/${addressIdToDelete}`);
+      showMessage({ message: 'Address Deleted', type: 'success' });
+      const updatedAddresses = savedAddresses.filter(addr => addr.address_id !== addressIdToDelete);
+      setSavedAddresses(updatedAddresses);
 
-            if (selectedSavedAddress?.address_id === addressIdToDelete) {
-              const newSelected =
-                updatedAddresses.length > 0 ? updatedAddresses[0] : null;
-              setSelectedSavedAddress(newSelected);
-              if (!newSelected) {
-                Alert.alert('No Addresses Left', 'Please add a new address.', [
-                  {
-                    text: 'OK',
-                    onPress: () =>
-                      navigation.navigate(NavigationString.DeliveryAddress),
-                  },
-                ]);
-              }
-            }
-          } catch (error) {
-            showMessage({
-              message: 'Could not delete address.',
-              type: 'danger',
-            });
-          }
-        },
-      },
-    ]);
+      if (selectedSavedAddress?.address_id === addressIdToDelete) {
+        const newSelected = updatedAddresses.length > 0 ? updatedAddresses[0] : null;
+        setSelectedSavedAddress(newSelected);
+        if (!newSelected) {
+          showMessage({
+            message: 'No Addresses Left',
+            description: 'Please add a new address.',
+            type: 'warning',
+          });
+          navigation.navigate(NavigationString.DeliveryAddress);
+        }
+      }
+    } catch (error) {
+      showMessage({
+        message: 'Could not delete address.',
+        type: 'danger',
+      });
+    }
   };
 
   const handlePlaceOrder = async () => {
     if (!selectedSavedAddress) {
-      Alert.alert('Missing Information', 'Please select a delivery address.');
+      showMessage({ message: 'Missing Information', description: 'Please select a delivery address.', type: 'warning' });
+      return;
+    }
+    if (!deliveryNotes.trim()) {
+      showMessage({ message: 'Missing Information', description: 'Delivery notes are required.', type: 'warning' });
       return;
     }
     setIsLoading(true);
     try {
+      const userPhoneNumber = await AsyncStorage.getItem('mobile_number');
+      if (!userPhoneNumber) {
+        showMessage({
+          message: 'Authentication Error',
+          description: 'Your phone number could not be found. Please try logging in again.',
+          type: 'danger',
+        });
+        setIsLoading(false);
+        return;
+      }
       const payload = {
         delivery_address: `${selectedSavedAddress.address_line1}, ${selectedSavedAddress.city}, ${selectedSavedAddress.state} - ${selectedSavedAddress.pincode}`,
-        delivery_phone: selectedSavedAddress.phone,
+        delivery_phone: userPhoneNumber,
         delivery_notes: deliveryNotes,
         payment_method: paymentMethod,
       };
@@ -166,6 +156,7 @@ const PaymentDetailes = ({ route, navigation }) => {
         paymentMethod,
         address: selectedSavedAddress,
         orderDetails: createdOrder,
+        deliveryPhoneNumber: userPhoneNumber,
       });
     } catch (error) {
       console.error('Failed to place order:', error.response?.data || error);
@@ -290,7 +281,7 @@ const PaymentDetailes = ({ route, navigation }) => {
             ))}
             <TextInput
               style={styles.notesInput}
-              placeholder="Delivery Notes (Optional)"
+              placeholder="Delivery Notes *"
               value={deliveryNotes}
               onChangeText={setDeliveryNotes}
             />
