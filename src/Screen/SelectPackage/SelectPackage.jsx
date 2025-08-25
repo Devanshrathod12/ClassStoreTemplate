@@ -17,6 +17,7 @@ import Colors from '../../styles/colors';
 import { scale, fontScale, verticalScale, moderateScale } from '../../styles/stylesconfig';
 import NavigationString from '../../Navigation/NavigationString';
 import { apiGet, apiPost } from '../../api/api';
+import AdaptiveSafeAreaView from '../AdaptiveSafeAreaView';
 
 const SelectPackageScreen = ({ route, navigation }) => {
     const { child } = route.params;
@@ -109,6 +110,7 @@ const SelectPackageScreen = ({ route, navigation }) => {
         );
     }
 
+    /*  AAPKA PURANA CODE COMMENT MEIN WAISA HI HAI
     const HandleAddToCart = async (bundleId) => {
         showMessage({ message: "Adding To Cart", type: "info" });
         try {
@@ -127,6 +129,7 @@ const SelectPackageScreen = ({ route, navigation }) => {
             showMessage({ message: "Failed to Add", description: "Could not add the bundle to your cart.", type: "danger" });
         }
     };
+    */
     
     const renderPackage = (pkg) => {
         const savedAmount = pkg.originalPrice - pkg.price;
@@ -137,9 +140,9 @@ const SelectPackageScreen = ({ route, navigation }) => {
                 key={pkg.id}
                 style={styles.packageCard}
                 activeOpacity={0.9}
+                // SIRF YEH LINE UPDATE KI GAYI HAI
                 onPress={() => navigation.navigate(NavigationString.ShowBooks, { 
-                    bundleId: pkg.id,
-                    bundleName: pkg.title,
+                    pkg: pkg,
                     child: child
                 })}
             >
@@ -171,6 +174,7 @@ const SelectPackageScreen = ({ route, navigation }) => {
                     </View>
                 )}
 
+                {/* AAPKA PURANA BUTTONS WALA CODE COMMENT MEIN WAISA HI HAI */}
                 {/* <View style={styles.buttonRow}>
                     <TouchableOpacity 
                         style={isAdded ? styles.addedToCartButton : styles.addToCartButton}
@@ -211,7 +215,8 @@ const SelectPackageScreen = ({ route, navigation }) => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <AdaptiveSafeAreaView>
+        <View style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor={Colors.backgroundLight} />
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -233,10 +238,12 @@ const SelectPackageScreen = ({ route, navigation }) => {
                 </View>
                 {renderContent()}
             </ScrollView>
-        </SafeAreaView>
+        </View>
+        </AdaptiveSafeAreaView>
     );
 };
 
+// ...AAPKE SAARE STYLES BINA KISI BADLAV KE...
 const styles = StyleSheet.create({
     container: {
         flex: 1,

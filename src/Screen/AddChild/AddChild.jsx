@@ -30,6 +30,7 @@ import {
 } from '../../styles/stylesconfig';
 import NavigationString from '../../Navigation/NavigationString';
 import { apiGet, apiPost, apiDelete } from '../../api/api';
+import AdaptiveSafeAreaView from "../AdaptiveSafeAreaView"
 
 const AddChildScreen = ({ route, navigation, onLogout }) => {
   const [localChildren, setLocalChildren] = useState([]);
@@ -393,7 +394,8 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
     };
 
   return (
-    <SafeAreaView style={styles.container}>
+     <AdaptiveSafeAreaView>
+    <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.backgroundLight} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -486,9 +488,9 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
                 <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
                   <Text style={styles.skipButtonText}>Skip</Text>
                 </TouchableOpacity>
-                {/* <TouchableOpacity onPress={onLogout}>
+                <TouchableOpacity onPress={onLogout}>
                   <Text>Log Out</Text>
-                </TouchableOpacity> */}
+                </TouchableOpacity>
               </View>
             </View>
           </View>
@@ -497,7 +499,8 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
         <DropdownModal />
         <CalendarModal />
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
+    </AdaptiveSafeAreaView>
   );
 };
 

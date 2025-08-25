@@ -499,6 +499,7 @@ import {
   moderateScale,
 } from '../../styles/stylesconfig';
 import { apiPost } from '../../api/api';
+import AdaptiveSafeAreaView from '../AdaptiveSafeAreaView';
 
 // Custom OTP Input Component
 const CustomOtpInput = ({ numberOfInputs = 6, onCodeFilled, onCodeChange }) => {
@@ -757,7 +758,8 @@ const WelcomeScreen = ({ onLoginSuccess }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <AdaptiveSafeAreaView>
+    <View style={styles.container}>
       <StatusBar
         barStyle="dark-content"
         backgroundColor={Colors.backgroundLight}
@@ -876,7 +878,8 @@ const WelcomeScreen = ({ onLoginSuccess }) => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
+    </AdaptiveSafeAreaView>
   );
 };
 

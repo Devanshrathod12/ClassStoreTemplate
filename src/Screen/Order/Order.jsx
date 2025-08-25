@@ -1,211 +1,162 @@
-import React, { useEffect } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    SafeAreaView,
-    StatusBar,
-    ScrollView,
-    TouchableOpacity
-} from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { showMessage } from 'react-native-flash-message';
 import Colors from '../../styles/colors';
 import { scale, fontScale, verticalScale, moderateScale } from '../../styles/stylesconfig';
 import NavigationString from '../../Navigation/NavigationString';
+import { apiPost } from '../../api/api';
+import AdaptiveSafeAreaView from '../AdaptiveSafeAreaView';
 
 const Order = ({ route, navigation }) => {
-    const { child, pkg, address, total, paymentMethod } = route.params;
+    const { orderData, address, total, paymentMethod, orderDetails } = route.params || {};
+    const [status, setStatus] = useState('confirming');
 
-    const orderNumber = `CS${Math.floor(1000000 + Math.random() * 9000000)}`;
+    const handleConfirmOrder = async () => {
+        if (!orderDetails?.order_id) {
+            Alert.alert("Error", "Order ID is missing.");
+            return;
+        }
+        setStatus('loading');
+        try {
+            await apiPost(`/api/v1/orders/${orderDetails.order_id}/confirm`, {});
+            setStatus('confirmed');
+            showMessage({ message: "Order Confirmed!", type: "success" });
+        } catch (error) {
+            console.error("Failed to confirm order:", error.response?.data || error);
+            showMessage({ message: "Confirmation Failed", description: "Please try again.", type: "danger" });
+            setStatus('confirming');
+        }
+    };
+
+    const handleCancelOrder = async () => {
+        if (!orderDetails?.order_id) {
+            Alert.alert("Error", "Order ID is missing.");
+            return;
+        }
+        setStatus('loading');
+        try {
+            await apiPost(`/api/v1/orders/${orderDetails.order_id}/cancel`, {});
+            showMessage({ message: "Order has been cancelled", type: "info" });
+            navigation.popToTop();
+            navigation.navigate(NavigationString.YourChildrenScreen);
+        } catch (error) {
+            console.error("Failed to cancel order:", error.response?.data || error);
+            showMessage({ message: "Cancellation Failed", description: "Please try again.", type: "danger" });
+            setStatus('confirming');
+        }
+    };
 
     const handleContinueShopping = () => {
+        navigation.popToTop();
         navigation.navigate(NavigationString.YourChildrenScreen);
     };
 
-    return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor={Colors.backgroundLight} />
-            <ScrollView contentContainerStyle={styles.content}>
-                <View style={styles.successIconContainer}>
-                    <MaterialCommunityIcons name="check-decagram" size={scale(50)} color={Colors.success} />
-                </View>
+    if (!orderData || !address || !orderDetails) {
+        return (
+            <AdaptiveSafeAreaView style={styles.centeredContent}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+                <Text style={{ marginTop: 10 }}>Loading order details...</Text>
+            </AdaptiveSafeAreaView>
+        );
+    }
 
-                <Text style={styles.title}>Order Confirmed!</Text>
-                <Text style={styles.subtitle}>Your order has been successfully placed</Text>
-
-                <View style={styles.card}>
-                    <View style={styles.orderInfo}>
-                        <Text style={styles.orderNumber}>Order #{orderNumber}</Text>
-                        <Text style={styles.deliveryEstimate}>Expected delivery in 3-5 business days</Text>
-                    </View>
-
-                    <View style={styles.detailSection}>
-                        <Text style={styles.sectionTitle}>Order Details</Text>
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Bundle:</Text>
-                            <Text style={styles.detailValue}>{pkg.title}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>For:</Text>
-                            <Text style={styles.detailValue}>{child.name}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Class:</Text>
-                            <Text style={styles.detailValue}>{child.standard}</Text>
-                        </View>
-                    </View>
-
-                    <View style={styles.detailSection}>
-                        <Text style={styles.sectionTitle}>Delivery Address</Text>
-                        <Text style={styles.addressText}>{address.fullName}</Text>
-                        <Text style={styles.addressText}>{address.addressLine}, {address.landmark}</Text>
-                        <Text style={styles.addressText}>{address.city}, {address.state} - {address.pincode}</Text>
-                        <Text style={styles.addressText}>Phone: +91 {address.phone}</Text>
-                    </View>
-
-                    <View style={styles.totalSection}>
-                        <View>
-                            <Text style={styles.totalLabel}>Total Paid:</Text>
-                            <Text style={styles.paymentMethod}>Payment Method: {paymentMethod}</Text>
-                        </View>
-                        <Text style={styles.totalValue}>₹{total}</Text>
-                    </View>
-
-                    <TouchableOpacity onPress={()=> navigation.navigate("YourChildrenScreen")} style={styles.continueButton} onPress={handleContinueShopping}>
+    if (status === 'confirmed') {
+        return (
+            <AdaptiveSafeAreaView style={styles.container}>
+                <View style={styles.centeredContent}>
+                    <View style={styles.successIconContainer}><MaterialCommunityIcons name="check-decagram" size={scale(50)} color={Colors.success} /></View>
+                    <Text style={styles.title}>Order Confirmed!</Text>
+                    <Text style={styles.subtitle}>Your order has been successfully placed.</Text>
+                    <TouchableOpacity style={styles.finalContinueButton} onPress={handleContinueShopping}>
                         <Text style={styles.continueButtonText}>Continue Shopping</Text>
                     </TouchableOpacity>
                 </View>
+            </AdaptiveSafeAreaView>
+        );
+    }
+    
+    return (
+        <AdaptiveSafeAreaView style={{ flex: 1 }}>
+        <View style={styles.container}>
+            <ScrollView contentContainerStyle={styles.content}>
+                <Text style={styles.title}>Confirm Your Order</Text>
+                <Text style={styles.subtitle}>Please review the details below.</Text>
+                <View style={styles.card}>
+                    <View style={styles.orderInfo}>
+                        <Text style={styles.orderNumber}>Order #{orderDetails.order_number}</Text>
+                        <Text style={styles.deliveryEstimate}>Status: Pending Confirmation</Text>
+                    </View>
+                    <View style={styles.detailSection}>
+                        <Text style={styles.sectionTitle}>Order Details</Text>
+                        {orderData.isFromCart ? (
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Items:</Text>
+                                <Text style={styles.detailValue}>{orderData.cart.quantity} from Cart</Text>
+                            </View>
+                        ) : (
+                            <>
+                                <View style={styles.detailRow}><Text style={styles.detailLabel}>Bundle:</Text><Text style={styles.detailValue}>{orderData.pkg.title}</Text></View>
+                                <View style={styles.detailRow}><Text style={styles.detailLabel}>For:</Text><Text style={styles.detailValue}>{orderData.child.name}</Text></View>
+                                <View style={styles.detailRow}><Text style={styles.detailLabel}>Class:</Text><Text style={styles.detailValue}>{orderData.child.standard}</Text></View>
+                            </>
+                        )}
+                    </View>
+                    <View style={styles.detailSection}>
+                        <Text style={styles.sectionTitle}>Delivery Address</Text>
+                        <Text style={styles.addressName}>{address.fullName}</Text>
+                        <Text style={styles.addressText}>{address.address_line1}, {address.address_line2}</Text>
+                        <Text style={styles.addressText}>{address.city}, {address.state} - {address.pincode}</Text>
+                        <Text style={styles.addressText}>Phone: +91 {address.phone}</Text>
+                    </View>
+                    <View style={styles.totalSection}>
+                        <View><Text style={styles.totalLabel}>Total Paid:</Text><Text style={styles.paymentMethod}>Payment Method: {paymentMethod}</Text></View>
+                        <Text style={styles.totalValue}>₹{total.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.buttonContainer}>
+                        <TouchableOpacity style={[styles.actionButton, styles.cancelButton]} onPress={handleCancelOrder} disabled={status === 'loading'}>
+                            <Text style={styles.cancelButtonText}>Cancel Order</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.actionButton, styles.confirmButton]} onPress={handleConfirmOrder} disabled={status === 'loading'}>
+                            {status === 'loading' ? <ActivityIndicator color={Colors.textLight} /> : <Text style={styles.continueButtonText}>Confirm Order</Text>}
+                        </TouchableOpacity>
+                    </View>
+                </View>
             </ScrollView>
-        </SafeAreaView>
+        </View>
+        </AdaptiveSafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: Colors.backgroundLight,
-    },
-    content: {
-        flexGrow: 1,
-        alignItems: 'center',
-        padding: scale(16),
-    },
-    successIconContainer: {
-        width: scale(80),
-        height: scale(80),
-        borderRadius: scale(40),
-        backgroundColor: Colors.backgroundSuccess,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: verticalScale(20),
-    },
-    title: {
-        fontSize: fontScale(22),
-        fontWeight: 'bold',
-        color: Colors.textPrimary,
-        marginTop: verticalScale(16),
-    },
-    subtitle: {
-        fontSize: fontScale(14),
-        color: Colors.textSecondary,
-        marginBottom: verticalScale(20),
-    },
-    card: {
-        width: '100%',
-        backgroundColor: Colors.WhiteBackgroudcolor,
-        borderRadius: moderateScale(12),
-        padding: moderateScale(16),
-        elevation: 3,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-    },
-    orderInfo: {
-        alignItems: 'center',
-        paddingBottom: verticalScale(12),
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.borderLight,
-    },
-    orderNumber: {
-        fontSize: fontScale(16),
-        fontWeight: 'bold',
-        color: Colors.success,
-    },
-    deliveryEstimate: {
-        fontSize: fontScale(12),
-        color: Colors.textMuted,
-        marginTop: verticalScale(4),
-    },
-    detailSection: {
-        paddingVertical: verticalScale(12),
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.borderLight,
-    },
-    sectionTitle: {
-        fontSize: fontScale(12),
-        color: Colors.textMuted,
-        marginBottom: verticalScale(8),
-    },
-    detailRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: verticalScale(4),
-    },
-    detailLabel: {
-        fontSize: fontScale(14),
-        color: Colors.textSecondary,
-    },
-    detailValue: {
-        fontSize: fontScale(14),
-        color: Colors.textDark,
-        fontWeight: '500',
-        textAlign: 'right',
-    },
-    addressText: {
-        fontSize: fontScale(14),
-        color: Colors.textSecondary,
-        lineHeight: verticalScale(20),
-    },
-    totalSection: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: verticalScale(12),
-        backgroundColor: Colors.backgroundSuccess,
-        marginHorizontal: -moderateScale(16),
-        paddingHorizontal: moderateScale(16),
-    },
-    totalLabel: {
-        fontSize: fontScale(14),
-        color: Colors.textDark,
-        fontWeight: 'bold',
-    },
-    paymentMethod: {
-        fontSize: fontScale(12),
-        color: Colors.success,
-    },
-    totalValue: {
-        fontSize: fontScale(20),
-        fontWeight: 'bold',
-        color: Colors.success,
-    },
-    continueButton: {
-        backgroundColor: Colors.primary,
-        borderRadius: moderateScale(8),
-        paddingVertical: verticalScale(14),
-        alignItems: 'center',
-        marginTop: verticalScale(16),
-        marginHorizontal: -moderateScale(16),
-        marginBottom: -moderateScale(16),
-        borderTopLeftRadius: 0,
-        borderTopRightRadius: 0,
-    },
-    continueButtonText: {
-        color: Colors.textLight,
-        fontSize: fontScale(16),
-        fontWeight: 'bold',
-    },
+    container: { flex: 1, backgroundColor: Colors.backgroundLight },
+    content: { flexGrow: 1, alignItems: 'center', padding: scale(16) },
+    centeredContent: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: scale(16) },
+    successIconContainer: { width: scale(80), height: scale(80), borderRadius: scale(40), backgroundColor: Colors.backgroundSuccess, justifyContent: 'center', alignItems: 'center', marginTop: verticalScale(20) },
+    title: { fontSize: fontScale(22), fontWeight: 'bold', color: Colors.textPrimary, marginTop: verticalScale(16), textAlign: 'center' },
+    subtitle: { fontSize: fontScale(14), color: Colors.textSecondary, marginBottom: verticalScale(20), textAlign: 'center' },
+    card: { width: '100%', backgroundColor: Colors.WhiteBackgroudcolor, borderRadius: moderateScale(12), padding: moderateScale(16), elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+    orderInfo: { alignItems: 'center', paddingBottom: verticalScale(12), borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
+    orderNumber: { fontSize: fontScale(16), fontWeight: 'bold', color: Colors.primary },
+    deliveryEstimate: { fontSize: fontScale(12), color: Colors.textMuted, marginTop: verticalScale(4) },
+    detailSection: { paddingVertical: verticalScale(12), borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
+    sectionTitle: { fontSize: fontScale(12), color: Colors.textMuted, marginBottom: verticalScale(8) },
+    detailRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(4) },
+    detailLabel: { fontSize: fontScale(14), color: Colors.textSecondary },
+    detailValue: { fontSize: fontScale(14), color: Colors.textDark, fontWeight: '500', textAlign: 'right' },
+    addressName: { fontSize: fontScale(14), color: Colors.textDark, fontWeight: 'bold', marginBottom: verticalScale(2) },
+    addressText: { fontSize: fontScale(14), color: Colors.textSecondary, lineHeight: verticalScale(20) },
+    totalSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: verticalScale(12), backgroundColor: Colors.backgroundSuccess, marginHorizontal: -moderateScale(16), paddingHorizontal: moderateScale(16) },
+    totalLabel: { fontSize: fontScale(14), color: Colors.textDark, fontWeight: 'bold' },
+    paymentMethod: { fontSize: fontScale(12), color: Colors.success },
+    totalValue: { fontSize: fontScale(20), fontWeight: 'bold', color: Colors.success },
+    buttonContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: verticalScale(20), marginHorizontal: -moderateScale(16), marginBottom: -moderateScale(16) },
+    actionButton: { flex: 1, paddingVertical: verticalScale(14), alignItems: 'center' },
+    cancelButton: { backgroundColor: Colors.background, borderBottomLeftRadius: moderateScale(12) },
+    cancelButtonText: { color: Colors.textSecondary, fontSize: fontScale(16), fontWeight: 'bold' },
+    confirmButton: { backgroundColor: Colors.primary, borderBottomRightRadius: moderateScale(12) },
+    continueButtonText: { color: Colors.textLight, fontSize: fontScale(16), fontWeight: 'bold' },
+    finalContinueButton: { backgroundColor: Colors.primary, borderRadius: moderateScale(8), paddingVertical: verticalScale(14), alignItems: 'center', marginTop: verticalScale(30), width: '90%' },
 });
 
 export default Order;

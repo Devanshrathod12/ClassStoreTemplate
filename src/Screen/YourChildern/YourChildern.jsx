@@ -18,6 +18,7 @@ import Colors from '../../styles/colors';
 import { scale, fontScale, verticalScale, moderateScale } from '../../styles/stylesconfig';
 import NavigationString from '../../Navigation/NavigationString';
 import { apiGet } from '../../api/api';
+import AdaptiveSafeAreaView from '../AdaptiveSafeAreaView';
 
 const avatarColors = ['#FFC107', '#4CAF50', '#2196F3', '#E91E63', '#9C27B0', '#FF5722'];
 
@@ -157,7 +158,8 @@ const YourChildrenScreen = ({ route, navigation }) => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <AdaptiveSafeAreaView>
+        <View style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor={Colors.backgroundLight} />
             <ScrollView contentContainerStyle={styles.content}>
                 <View style={styles.headerContainer}>
@@ -193,7 +195,7 @@ const YourChildrenScreen = ({ route, navigation }) => {
                             <MaterialCommunityIcons name="cart-outline" size={scale(20)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>My Cart</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.exploreItem}>
+                        <TouchableOpacity onPress={() => navigation.navigate("MyOrders")} style={styles.exploreItem}>
                             <MaterialCommunityIcons name="receipt-text-outline" size={scale(20)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>My Orders</Text>
                         </TouchableOpacity>
@@ -205,7 +207,8 @@ const YourChildrenScreen = ({ route, navigation }) => {
                 </View>
                 <Text style={styles.footerText}>Made with ❤️ for learners everywhere</Text>
             </ScrollView>
-        </SafeAreaView>
+        </View>
+        </AdaptiveSafeAreaView>
     );
 };
 

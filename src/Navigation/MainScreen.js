@@ -58,6 +58,16 @@ export default function (Stack, isTokenValid, onLoginSuccess,onLogout) {
         component={Screen.ShowBooks}
         options={{ headerShown: false }}
       />
+      <Stack.Screen
+        name={NavigationString.MyOrders}
+        component={Screen.MyOrders}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name={NavigationString.OrderDetails}
+        component={Screen.OrderDetails}
+        options={{ headerShown: false }}
+      />
     </>
   );
 }

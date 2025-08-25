@@ -15,54 +15,74 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Colors from '../../styles/colors';
 import { scale, fontScale, verticalScale, moderateScale } from '../../styles/stylesconfig';
-import { apiGet } from '../../api/api';
+// Step 1: apiDelete ko import karein
+import { apiGet, apiDelete } from '../../api/api'; 
+import AdaptiveSafeAreaView from '../AdaptiveSafeAreaView';
 
 const MyCartScreen = ({ navigation }) => {
     const [cartItems, setCartItems] = useState([]);
     const [cartDetails, setCartDetails] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
 
+    const fetchCartData = useCallback(async () => {
+        try {
+            const cartResponse = await apiGet('/api/v1/cart');
+            if (cartResponse && cartResponse.cart_id) {
+                setCartDetails(cartResponse);
+                const cartId = cartResponse.cart_id;
+                
+                const itemsResponse = await apiGet(`/api/v1/cart/${cartId}/items`);
+                
+                if (itemsResponse && Array.isArray(itemsResponse) && itemsResponse.length > 0) {
+                    const enrichedItems = await Promise.all(
+                        itemsResponse.map(async (item) => {
+                            const bundleDetails = await apiGet(`/api/v1/bundle/${item.bundle_id}`);
+                            return {
+                                ...item,
+                                bundle_name: bundleDetails?.bundle_name || 'Unknown Bundle',
+                            };
+                        })
+                    );
+                    setCartItems(enrichedItems);
+                } else {
+                    setCartItems([]);
+                }
+            } else {
+                 setCartItems([]);
+                 setCartDetails(null);
+            }
+        } catch (error) {
+            console.error("Failed to fetch cart items:", error);
+            if (isLoading) {
+                showMessage({ message: "Error", description: "Could not load your cart.", type: 'danger' });
+            }
+            setCartItems([]);
+        } finally {
+            if (isLoading) setIsLoading(false);
+        }
+    }, [isLoading]);
+
     useFocusEffect(
         useCallback(() => {
-            const fetchCartData = async () => {
-                setIsLoading(true);
-                try {
-                    const cartResponse = await apiGet('/api/v1/cart');
-                    if (cartResponse && cartResponse.cart_id) {
-                        setCartDetails(cartResponse);
-                        const cartId = cartResponse.cart_id;
-                        
-                        const itemsResponse = await apiGet(`/api/v1/cart/${cartId}/items`);
-                        
-                        if (itemsResponse && Array.isArray(itemsResponse) && itemsResponse.length > 0) {
-                            const enrichedItems = await Promise.all(
-                                itemsResponse.map(async (item) => {
-                                    const bundleDetails = await apiGet(`/api/v1/bundle/${item.bundle_id}`);
-                                    return {
-                                        ...item,
-                                        bundle_name: bundleDetails?.bundle_name || 'Unknown Bundle',
-                                    };
-                                })
-                            );
-                            setCartItems(enrichedItems);
-                        } else {
-                            setCartItems([]);
-                        }
-                    } else {
-                         setCartItems([]);
-                         setCartDetails(null);
-                    }
-                } catch (error) {
-                    console.error("Failed to fetch cart items:", error);
-                    showMessage({ message: "Error", description: "Could not load your cart.", type: 'danger' });
-                    setCartItems([]);
-                } finally {
-                    setIsLoading(false);
-                }
-            };
+            setIsLoading(true);
             fetchCartData();
         }, [])
     );
+
+    const handleDeleteItem = async (cartItemId) => {
+        showMessage({ message: "Removing item...", type: "info" });
+        try {
+            await apiDelete(`/api/v1/cart/items/${cartItemId}`);
+            showMessage({ message: "Success", description: "Item removed from your cart.", type: "success" });
+            
+        
+            fetchCartData();
+
+        } catch (error) {
+            console.error("Failed to delete item:", error);
+            showMessage({ message: "Error", description: "Could not remove the item.", type: "danger" });
+        }
+    };
 
     const renderHeader = () => (
         <View style={styles.header}>
@@ -82,7 +102,7 @@ const MyCartScreen = ({ navigation }) => {
             </View>
             <View style={styles.itemActions}>
                 <Text style={styles.itemQuantity}>Qty: {item.quantity}</Text>
-                <TouchableOpacity onPress={() => {/* Delete logic here */}}>
+                <TouchableOpacity onPress={() => handleDeleteItem(item.cart_item_id)}>
                     <MaterialCommunityIcons name="delete-outline" size={scale(22)} color={Colors.danger} />
                 </TouchableOpacity>
             </View>
@@ -125,7 +145,8 @@ const MyCartScreen = ({ navigation }) => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <AdaptiveSafeAreaView>
+        <View style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor={Colors.backgroundLight} />
             {renderHeader()}
             <ScrollView contentContainerStyle={styles.content}>
@@ -133,15 +154,17 @@ const MyCartScreen = ({ navigation }) => {
             </ScrollView>
             {!isLoading && cartItems.length > 0 && (
                 <View style={styles.footer}>
-                    <TouchableOpacity style={styles.checkoutButton}>
+                    <TouchableOpacity onPress={() => navigation.navigate("Delivery")} style={styles.checkoutButton}>
                         <Text style={styles.checkoutButtonText}>Proceed to Checkout</Text>
                     </TouchableOpacity>
                 </View>
             )}
-        </SafeAreaView>
+        </View>
+        </AdaptiveSafeAreaView>
     );
 };
 
+// ...AAPKE SAARE STYLES BINA KISI BADLAV KE...
 const styles = StyleSheet.create({
     container: {
         flex: 1,

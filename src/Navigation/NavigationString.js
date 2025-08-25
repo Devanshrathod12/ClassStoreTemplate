@@ -1,5 +1,5 @@
 
-import {AddChild, MyCart, Order, SelectPackage, ShowBooks, WelComeScreen, YourChildern} from "../Screen"
+import {AddChild, MyCart, MyOrders, Order, OrderDetails, SelectPackage, ShowBooks, WelComeScreen, YourChildern} from "../Screen"
 import DeliveryAddress from "../Screen/DeliveryAddress/DeliveryAddress"
 import PaymentDetailes from "../Screen/Paymentscreen/PaymentDetailes"
 import YourChildrenScreen from "../Screen/YourChildern/YourChildern"
@@ -12,5 +12,7 @@ export default {
       PaymentDetailes:"PaymentDetailes",
       Order:"Order",
       MyCart:"MyCart",
-      ShowBooks:"ShowBooks"
+      ShowBooks:"ShowBooks",
+      MyOrders:"MyOrders",
+      OrderDetails:"OrderDetails"
     }

@@ -1,19 +1,22 @@
-import { StyleSheet, Text, View, SafeAreaView, FlatList, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { showMessage } from 'react-native-flash-message';
 import Colors from '../../styles/colors';
 import { scale, fontScale, moderateScale, verticalScale } from '../../styles/stylesconfig';
-import { apiGet } from '../../api/api';
+import { apiGet, apiPost } from '../../api/api';
 import NavigationString from '../../Navigation/NavigationString';
+import AdaptiveSafeAreaView from '../AdaptiveSafeAreaView';
 
 const ShowBooks = ({ route, navigation }) => {
-  const { bundleId, bundleName, child } = route.params;
+  const { pkg, child } = route.params;
+  const bundleId = pkg.id;
+  const bundleName = pkg.title;
 
   const [books, setBooks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [addedToCartBookIds, setAddedToCartBookIds] = useState([]);
+  const [isBundleAdded, setIsBundleAdded] = useState(false);
 
   useEffect(() => {
     const fetchBookDetails = async () => {
@@ -44,25 +47,30 @@ const ShowBooks = ({ route, navigation }) => {
     fetchBookDetails();
   }, [bundleId]);
 
-  const handleAddToCart = (bookId) => {
-    showMessage({ message: "Adding book to cart", type: "info" });
-    setAddedToCartBookIds(prevIds => [...prevIds, bookId]);
-    showMessage({ message: "Success!", description: "Book added to your cart.", type: "success" });
+  const handleAddToCart = async (bundleId) => {
+    showMessage({ message: "Adding To Cart", type: "info" });
+    try {
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 1);
+        const payload = {
+            bundle_id: String(bundleId),
+            quantity: 1,
+            expires_at: expiresAt.toISOString(),
+        };
+        await apiPost('/api/v1/cart', payload);
+        setIsBundleAdded(true);
+        showMessage({ message: "Success!", description: "Bundle added to your cart.", type: "success" });
+    } catch (error) {
+        console.error("Failed to add to cart:", error.response?.data || error);
+        showMessage({ message: "Failed to Add", description: "Could not add the bundle to your cart.", type: "danger" });
+    }
   };
 
-  const handleOrderNow = (book) => {
-    const pseudoPkg = {
-      id: book.book_id,
-      title: book.book_name,
-      price: parseFloat(book.price),
-      originalPrice: parseFloat(book.price),
-      isSingleBook: true,
-    };
-    navigation.navigate(NavigationString.DeliveryAddress, { child: child, pkg: pseudoPkg });
+  const handleOrderNow = () => {
+    navigation.navigate(NavigationString.DeliveryAddress, { child: child, pkg: pkg });
   };
-
+  
   const renderBookItem = ({ item }) => {
-    const isAdded = addedToCartBookIds.includes(item.book_id);
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
@@ -75,30 +83,6 @@ const ShowBooks = ({ route, navigation }) => {
             {item.subject && <Text style={styles.bookSubject}>Subject: {item.subject}</Text>}
             <Text style={styles.bookPrice}>Price: ₹{parseFloat(item.price).toFixed(2)}</Text>
           </View>
-        </View>
-
-        <View style={styles.buttonRow}>
-          <TouchableOpacity
-            style={isAdded ? styles.addedToCartButton : styles.addToCartButton}
-            onPress={() => handleAddToCart(item.book_id)}
-            disabled={isAdded}
-          >
-            {isAdded ? (
-              <MaterialIcons name="check" size={scale(18)} color={Colors.success} />
-            ) : (
-              <MaterialCommunityIcons name="cart-plus" size={scale(18)} color={Colors.primary} />
-            )}
-            <Text style={isAdded ? styles.addedToCartButtonText : styles.addToCartButtonText}>
-              {isAdded ? "Added" : "Add To Cart"}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.orderButton}
-            onPress={() => handleOrderNow(item)}
-          >
-            <Text style={styles.orderButtonText}>Order Now</Text>
-          </TouchableOpacity>
         </View>
       </View>
     );
@@ -121,16 +105,47 @@ const ShowBooks = ({ route, navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <MaterialIcons name="arrow-back" size={scale(24)} color={Colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{bundleName}</Text>
-        <View style={{ width: scale(24) }} />
+    <AdaptiveSafeAreaView>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <MaterialIcons name="arrow-back" size={scale(24)} color={Colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle} numberOfLines={1}>{bundleName}</Text>
+          <View style={{ width: scale(24) }} />
+        </View>
+        
+        <View style={{flex: 1}}>
+            {renderContent()}
+        </View>
+
+        {!isLoading && books.length > 0 && (
+            <View style={styles.footer}>
+                <TouchableOpacity
+                    style={isBundleAdded ? styles.addedToCartButton : styles.addToCartButton}
+                    onPress={() => handleAddToCart(bundleId)}
+                    disabled={isBundleAdded}
+                >
+                    {isBundleAdded ? (
+                    <MaterialIcons name="check" size={scale(18)} color={Colors.success} />
+                    ) : (
+                    <MaterialCommunityIcons name="cart-plus" size={scale(18)} color={Colors.primary} />
+                    )}
+                    <Text style={isBundleAdded ? styles.addedToCartButtonText : styles.addToCartButtonText}>
+                    {isBundleAdded ? "Added" : "Add To Cart"}
+                    </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.orderButton}
+                    onPress={handleOrderNow}
+                >
+                    <Text style={styles.orderButtonText}>Order Now</Text>
+                </TouchableOpacity>
+            </View>
+        )}
       </View>
-      {renderContent()}
-    </SafeAreaView>
+    </AdaptiveSafeAreaView>
   );
 }
 
@@ -165,7 +180,8 @@ const styles = StyleSheet.create({
     },
     listContainer: {
         paddingHorizontal: moderateScale(16),
-        paddingVertical: moderateScale(20),
+        paddingTop: moderateScale(20),
+        paddingBottom: moderateScale(10),
     },
     listHeader: {
         fontSize: fontScale(18),
@@ -187,9 +203,6 @@ const styles = StyleSheet.create({
     cardHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingBottom: verticalScale(12),
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.borderLight,
     },
     bookImage: {
         width: scale(70),
@@ -218,11 +231,18 @@ const styles = StyleSheet.create({
         color: Colors.primary,
         fontWeight: '600',
     },
-    buttonRow: {
+    emptyText: {
+        textAlign: 'center',
+        marginTop: moderateScale(50),
+        fontSize: fontScale(14),
+        color: Colors.textMuted,
+    },
+    footer: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginTop: verticalScale(15),
+        padding: moderateScale(16),
+        backgroundColor: Colors.WhiteBackgroudcolor,
+        borderTopWidth: 1,
+        borderTopColor: Colors.borderLight,
     },
     addToCartButton: {
         flexDirection: 'row',
@@ -274,10 +294,4 @@ const styles = StyleSheet.create({
         fontSize: fontScale(16),
         fontWeight: 'bold',
     },
-    emptyText: {
-        textAlign: 'center',
-        marginTop: moderateScale(50),
-        fontSize: fontScale(14),
-        color: Colors.textMuted,
-    }
 });
