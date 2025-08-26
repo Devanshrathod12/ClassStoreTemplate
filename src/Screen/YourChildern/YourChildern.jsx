@@ -27,18 +27,6 @@ const getInitials = (name) => {
     return name.charAt(0).toUpperCase();
 };
 
-const calculateAge = (dob) => {
-    if (!dob) return null;
-    const birthDate = new Date(dob);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDifference = today.getMonth() - birthDate.getMonth();
-    if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-    }
-    return age;
-};
-
 const ChildCard = ({ child, index, onPress }) => {
     const cardColor = avatarColors[index % avatarColors.length];
     return (
@@ -46,18 +34,11 @@ const ChildCard = ({ child, index, onPress }) => {
             <View style={[styles.cardAvatar, { backgroundColor: cardColor }]}>
                 <Text style={styles.cardAvatarText}>{getInitials(child.name)}</Text>
             </View>
-            <Text style={styles.cardName} numberOfLines={1}>{child.name || 'No Name'}</Text>
-            <View style={styles.cardDetailsContainer}>
-                <View style={styles.cardDetailItem}>
-                    <MaterialCommunityIcons name="cake-variant-outline" size={scale(14)} color={Colors.textSecondary} />
-                    <Text style={styles.cardDetailText}>{child.age !== null ? `${child.age} years` : 'N/A'}</Text>
-                </View>
-                <View style={styles.cardDetailItem}>
-                    <MaterialCommunityIcons name="school-outline" size={scale(14)} color={Colors.textSecondary} />
-                    <Text style={styles.cardDetailText}>{child.class_name || 'N/A'}</Text>
-                </View>
+            <View style={styles.cardInfoContainer}>
+                <Text style={styles.cardName} numberOfLines={1}>{child.name || 'No Name'}</Text>
+                <Text style={styles.cardSchoolName} numberOfLines={1}>{child.school_name || 'School not available'}</Text>
+                <Text style={styles.cardClassName}>{child.class_name || 'N/A'}</Text>
             </View>
-            <Text style={styles.cardSchoolName} numberOfLines={1}>{child.school_name || 'School not available'}</Text>
         </TouchableOpacity>
     );
 };
@@ -82,7 +63,10 @@ const YourChildrenScreen = ({ route, navigation }) => {
     useFocusEffect(
         useCallback(() => {
             const fetchData = async () => {
-                setIsLoading(true);
+                // Do not set loading to true if it's just a refresh, to avoid flicker
+                if (children.length === 0) {
+                    setIsLoading(true);
+                }
                 try {
                     const userId = await AsyncStorage.getItem('userId');
                     if (userId) {
@@ -93,12 +77,12 @@ const YourChildrenScreen = ({ route, navigation }) => {
                         const response = await apiGet(`/api/v1/children/user/${userId}`);
                         if (response && Array.isArray(response)) {
                             const enrichedChildren = response.map(apiChild => {
-                                const persistentData = extraData[apiChild.name] || {};
+                                // FIX: Use the permanent child ID as the key to get extra data
+                                const persistentData = extraData[apiChild.id] || {};
                                 return {
                                     ...apiChild,
                                     classId: apiChild.class_id,
                                     schoolId: apiChild.school_id,
-                                    age: calculateAge(apiChild.dob),
                                     school_name: persistentData.school_name || 'N/A',
                                     class_name: persistentData.class_name || 'N/A',
                                     standard: persistentData.class_name || 'N/A',
@@ -121,7 +105,8 @@ const YourChildrenScreen = ({ route, navigation }) => {
                 }
             };
             fetchData();
-        }, [route.params?.refresh])
+        // The empty dependency array [] makes this effect run every time the screen is focused
+        }, [])
     );
 
     const handleChildPress = (child) => {
@@ -163,10 +148,13 @@ const YourChildrenScreen = ({ route, navigation }) => {
             <StatusBar barStyle="dark-content" backgroundColor={Colors.backgroundLight} />
             <ScrollView contentContainerStyle={styles.content}>
                 <View style={styles.headerContainer}>
-                    {/* <View style={styles.logoContainer}>
-                        <MaterialCommunityIcons name="book-open-variant" size={scale(28)} color={Colors.textLight} />
-                    </View> */}
+                    <View style={{ width: scale(24) }} />
                     <Text style={styles.appName}>ClassStore</Text>
+                    <TouchableOpacity 
+                        onPress={() => navigation.navigate("MyCart")}
+                    >
+                        <MaterialCommunityIcons name="cart-outline" size={scale(24)} color={Colors.textPrimary} />
+                    </TouchableOpacity>
                 </View>
                 
                 <View style={styles.section}>
@@ -191,17 +179,20 @@ const YourChildrenScreen = ({ route, navigation }) => {
                             <MaterialCommunityIcons name="account-plus-outline" size={scale(20)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>Add Another Child</Text>
                         </TouchableOpacity>
+                        <TouchableOpacity style={styles.exploreItem} onPress={() => { /* Navigate to Add Address Screen */ }}>
+                            <MaterialCommunityIcons name="map-marker-plus-outline" size={scale(20)} color={Colors.textSecondary} />
+                            <Text style={styles.exploreItemText}>Add Address</Text>
+                        </TouchableOpacity>
                         <TouchableOpacity onPress={()=> navigation.navigate("MyCart")} style={styles.exploreItem}>
                             <MaterialCommunityIcons name="cart-outline" size={scale(20)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>My Cart</Text>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => navigation.navigate("MyOrders")} style={styles.exploreItem}>
                         <MaterialCommunityIcons 
-  name="package-variant-closed" 
-  size={scale(20)} 
-  color={Colors.textSecondary} 
-/>
-
+                            name="package-variant-closed" 
+                            size={scale(20)} 
+                            color={Colors.textSecondary} 
+                        />
                             <Text style={styles.exploreItemText}>My Orders</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.exploreItem, {borderBottomWidth: 0}]}>
@@ -232,17 +223,11 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     headerContainer: {
+        flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: verticalScale(10),
-    },
-    logoContainer: {
-        width: scale(50),
-        height: scale(50),
-        borderRadius: moderateScale(12),
-        backgroundColor: Colors.primary,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: verticalScale(8),
+        justifyContent: 'space-between',
+        paddingVertical: verticalScale(12),
+        paddingHorizontal: scale(16),
     },
     appName: {
         fontSize: fontScale(18),
@@ -284,7 +269,7 @@ const styles = StyleSheet.create({
         paddingVertical: verticalScale(5),
     },
     childCard: {
-        backgroundColor: Colors.WhiteBackgroudcolor,
+        backgroundColor: "white",
         borderRadius: moderateScale(16),
         padding: moderateScale(16),
         alignItems: 'center',
@@ -304,40 +289,35 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: verticalScale(12),
         borderWidth: 2,
-        borderColor: Colors.WhiteBackgroudcolor,
+        borderColor: "white",
     },
     cardAvatarText: {
         fontSize: fontScale(24),
         fontWeight: 'bold',
         color: Colors.textLight,
     },
+    cardInfoContainer: {
+        alignItems: 'center',
+    },
     cardName: {
         fontSize: fontScale(15),
         fontWeight: 'bold',
         color: Colors.textDark,
-        marginBottom: verticalScale(6),
-    },
-    cardDetailsContainer: {
-        flexDirection: 'row',
-        marginBottom: verticalScale(6),
-    },
-    cardDetailItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginHorizontal: scale(6),
-    },
-    cardDetailText: {
-        fontSize: fontScale(12),
-        color: Colors.textSecondary,
-        marginLeft: scale(4),
+        marginBottom: verticalScale(4),
     },
     cardSchoolName: {
-        fontSize: fontScale(11),
-        color: Colors.textMuted,
+        fontSize: fontScale(12),
+        color: Colors.textSecondary,
         textAlign: 'center',
+        marginBottom: verticalScale(4),
+    },
+    cardClassName: {
+        fontSize: fontScale(12),
+        color: Colors.primary,
+        fontWeight: '600'
     },
     emptyStateContainer: {
-        backgroundColor: Colors.WhiteBackgroudcolor,
+        backgroundColor: "white",
         borderRadius: moderateScale(16),
         padding: moderateScale(20),
         alignItems: 'center',
@@ -370,37 +350,8 @@ const styles = StyleSheet.create({
         fontSize: fontScale(14),
         fontWeight: 'bold',
     },
-    statsRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        width: '100%',
-        marginTop: verticalScale(20),
-        paddingHorizontal: scale(16),
-    },
-    statBox: {
-        backgroundColor: Colors.WhiteBackgroudcolor,
-        borderRadius: moderateScale(12),
-        padding: moderateScale(12),
-        alignItems: 'center',
-        width: '48%',
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-    },
-    statValue: {
-        fontSize: fontScale(14),
-        fontWeight: 'bold',
-        color: Colors.textDark,
-        marginTop: verticalScale(4),
-    },
-    statLabel: {
-        fontSize: fontScale(12),
-        color: Colors.textMuted,
-    },
     exploreCard: {
-        backgroundColor: Colors.WhiteBackgroudcolor,
+        backgroundColor: "white",
         borderRadius: moderateScale(12),
         marginHorizontal: scale(16),
         padding: moderateScale(12),

@@ -3,7 +3,6 @@ import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
     StatusBar,
     ScrollView,
     TouchableOpacity,
@@ -11,78 +10,137 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { showMessage } from 'react-native-flash-message';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Colors from '../../styles/colors';
 import { scale, fontScale, verticalScale, moderateScale } from '../../styles/stylesconfig';
-// Step 1: apiDelete ko import karein
-import { apiGet, apiDelete } from '../../api/api'; 
+import { apiGet, apiDelete } from '../../api/api';
 import AdaptiveSafeAreaView from '../AdaptiveSafeAreaView';
 
+const ASYNC_STORAGE_KEY = 'childCartData';
+
 const MyCartScreen = ({ navigation }) => {
-    const [cartItems, setCartItems] = useState([]);
+    const [cartDataByChild, setCartDataByChild] = useState([]);
     const [cartDetails, setCartDetails] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
 
+    // This function remains correct. It properly reads the API and AsyncStorage.
     const fetchCartData = useCallback(async () => {
+        setIsLoading(true);
         try {
-            const cartResponse = await apiGet('/api/v1/cart');
+            const userId = await AsyncStorage.getItem('userId');
+            if (!userId) {
+                setCartDataByChild([]);
+                setCartDetails(null);
+                setIsLoading(false);
+                return;
+            }
+
+            const [cartResponse, childrenResponse, childCartsString] = await Promise.all([
+                apiGet('/api/v1/cart').catch(() => null),
+                apiGet(`/api/v1/children/user/${userId}`),
+                AsyncStorage.getItem(ASYNC_STORAGE_KEY)
+            ]);
+
+            const childCarts = childCartsString ? JSON.parse(childCartsString) : {};
+
             if (cartResponse && cartResponse.cart_id) {
                 setCartDetails(cartResponse);
-                const cartId = cartResponse.cart_id;
                 
-                const itemsResponse = await apiGet(`/api/v1/cart/${cartId}/items`);
-                
-                if (itemsResponse && Array.isArray(itemsResponse) && itemsResponse.length > 0) {
+                const itemsResponse = await apiGet(`/api/v1/cart/${cartResponse.cart_id}/items`).catch(() => []);
+
+                if (Array.isArray(itemsResponse) && itemsResponse.length > 0) {
                     const enrichedItems = await Promise.all(
                         itemsResponse.map(async (item) => {
-                            const bundleDetails = await apiGet(`/api/v1/bundle/${item.bundle_id}`);
+                            const bundleDetails = await apiGet(`/api/v1/bundle/${item.bundle_id}`).catch(() => null);
                             return {
                                 ...item,
                                 bundle_name: bundleDetails?.bundle_name || 'Unknown Bundle',
                             };
                         })
                     );
-                    setCartItems(enrichedItems);
+                    
+                    const itemDetailsMap = new Map();
+                    enrichedItems.forEach(item => itemDetailsMap.set(String(item.bundle_id), item));
+
+                    const structuredData = childrenResponse
+                        .map(child => {
+                            const childIdStr = String(child.id);
+                            const bundleIdsForChild = childCarts[childIdStr] || [];
+                            const itemsForChild = bundleIdsForChild
+                                .map(bundleId => itemDetailsMap.get(String(bundleId)))
+                                .filter(Boolean);
+
+                            return {
+                                childInfo: child,
+                                items: itemsForChild,
+                            };
+                        })
+                        .filter(group => group.items.length > 0);
+
+                    setCartDataByChild(structuredData);
                 } else {
-                    setCartItems([]);
+                    setCartDataByChild([]);
                 }
             } else {
-                 setCartItems([]);
-                 setCartDetails(null);
+                setCartDataByChild([]);
+                setCartDetails(null);
             }
         } catch (error) {
             console.error("Failed to fetch cart items:", error);
-            if (isLoading) {
-                showMessage({ message: "Error", description: "Could not load your cart.", type: 'danger' });
-            }
-            setCartItems([]);
+            showMessage({ message: "Error", description: "Could not load your cart.", type: 'danger' });
+            setCartDataByChild([]);
         } finally {
-            if (isLoading) setIsLoading(false);
+            setIsLoading(false);
         }
-    }, [isLoading]);
+    }, []);
 
     useFocusEffect(
         useCallback(() => {
-            setIsLoading(true);
             fetchCartData();
-        }, [])
+        }, [fetchCartData])
     );
 
-    const handleDeleteItem = async (cartItemId) => {
+    // --- LOGIC CORRECTION: This function is now updated ---
+    const handleDeleteItem = async (cartItemId, bundleId, childId) => {
         showMessage({ message: "Removing item...", type: "info" });
         try {
+            // 1. Delete the item from the API. This removes it from the central cart.
             await apiDelete(`/api/v1/cart/items/${cartItemId}`);
+            
+            // 2. (THE FIX) Remove the link to this bundle from ALL children in AsyncStorage.
+            const childCartsRaw = await AsyncStorage.getItem(ASYNC_STORAGE_KEY);
+            let childCarts = childCartsRaw ? JSON.parse(childCartsRaw) : {};
+            
+            console.log(`Deleting bundle ${bundleId} from all children in AsyncStorage.`);
+
+            // Iterate over every child in the storage object
+            for (const key in childCarts) {
+                // Filter out the deleted bundleId from each child's list
+                childCarts[key] = childCarts[key].filter(id => String(id) !== String(bundleId));
+            }
+            
+            // Optional: Clean up any children who now have an empty list
+            const cleanedChildCarts = Object.entries(childCarts)
+                .filter(([_, bundles]) => bundles.length > 0)
+                .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {});
+
+            await AsyncStorage.setItem(ASYNC_STORAGE_KEY, JSON.stringify(cleanedChildCarts));
+            
             showMessage({ message: "Success", description: "Item removed from your cart.", type: "success" });
             
-        
+            // 3. Refresh data from the server. The cart will now be empty.
             fetchCartData();
 
         } catch (error) {
             console.error("Failed to delete item:", error);
-            showMessage({ message: "Error", description: "Could not remove the item.", type: "danger" });
+            const errorMessage = error.response?.data?.detail || "Could not remove the item.";
+            showMessage({ message: "Error", description: errorMessage, type: "danger" });
         }
     };
+
+    // --- No changes are needed below this line ---
 
     const renderHeader = () => (
         <View style={styles.header}>
@@ -94,15 +152,15 @@ const MyCartScreen = ({ navigation }) => {
         </View>
     );
 
-    const renderCartItem = (item, index) => (
-        <View key={item.cart_item_id} style={styles.itemCard}>
+    const renderCartItem = (item, childId) => (
+        <View key={`${childId}-${item.cart_item_id}`} style={styles.itemCard}>
             <View style={styles.itemDetails}>
                 <Text style={styles.itemName} numberOfLines={2}>{item.bundle_name}</Text>
                 <Text style={styles.itemPrice}>₹{parseFloat(item.unit_price).toFixed(2)}</Text>
             </View>
             <View style={styles.itemActions}>
                 <Text style={styles.itemQuantity}>Qty: {item.quantity}</Text>
-                <TouchableOpacity onPress={() => handleDeleteItem(item.cart_item_id)}>
+                <TouchableOpacity onPress={() => handleDeleteItem(item.cart_item_id, item.bundle_id, childId)}>
                     <MaterialCommunityIcons name="delete-outline" size={scale(22)} color={Colors.danger} />
                 </TouchableOpacity>
             </View>
@@ -127,18 +185,23 @@ const MyCartScreen = ({ navigation }) => {
         if (isLoading) {
             return <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 50 }} />;
         }
-        if (cartItems.length === 0) {
+        if (cartDataByChild.length === 0) {
             return (
                 <View style={styles.emptyContainer}>
                     <MaterialCommunityIcons name="cart-off" size={scale(60)} color={Colors.textMuted} />
                     <Text style={styles.emptyText}>Your Cart is Empty</Text>
-                    <Text style={styles.emptySubText}>Looks like you haven't added anything to your cart yet.</Text>
+                    <Text style={styles.emptySubText}>Looks like you haven't added anything yet.</Text>
                 </View>
             );
         }
         return (
             <>
-                {cartItems.map((item, index) => renderCartItem(item, index))}
+                {cartDataByChild.map(childGroup => (
+                    <View key={childGroup.childInfo.id} style={styles.childSection}>
+                        <Text style={styles.childSectionHeader}>Items for {childGroup.childInfo.name}</Text>
+                        {childGroup.items.map(item => renderCartItem(item, childGroup.childInfo.id))}
+                    </View>
+                ))}
                 {renderSummary()}
             </>
         );
@@ -146,25 +209,24 @@ const MyCartScreen = ({ navigation }) => {
 
     return (
         <AdaptiveSafeAreaView>
-        <View style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor={Colors.backgroundLight} />
-            {renderHeader()}
-            <ScrollView contentContainerStyle={styles.content}>
-                {renderContent()}
-            </ScrollView>
-            {!isLoading && cartItems.length > 0 && (
-                <View style={styles.footer}>
-                    <TouchableOpacity onPress={() => navigation.navigate("Delivery")} style={styles.checkoutButton}>
-                        <Text style={styles.checkoutButtonText}>Proceed to Checkout</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
-        </View>
+            <View style={styles.container}>
+                <StatusBar barStyle="dark-content" backgroundColor={Colors.backgroundLight} />
+                {renderHeader()}
+                <ScrollView contentContainerStyle={styles.content}>
+                    {renderContent()}
+                </ScrollView>
+                {!isLoading && cartDataByChild.length > 0 && (
+                    <View style={styles.footer}>
+                        <TouchableOpacity onPress={() => navigation.navigate("Delivery")} style={styles.checkoutButton}>
+                            <Text style={styles.checkoutButtonText}>Proceed to Checkout</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+            </View>
         </AdaptiveSafeAreaView>
     );
 };
 
-// ...AAPKE SAARE STYLES BINA KISI BADLAV KE...
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -206,11 +268,23 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         paddingHorizontal: scale(20),
     },
+    childSection: {
+        marginBottom: verticalScale(20),
+    },
+    childSectionHeader: {
+        fontSize: fontScale(16),
+        fontWeight: 'bold',
+        color: Colors.textDark,
+        marginBottom: verticalScale(10),
+        paddingBottom: verticalScale(5),
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.borderLight,
+    },
     itemCard: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: Colors.WhiteBackgroudcolor,
+        backgroundColor: "white",
         borderRadius: moderateScale(12),
         padding: moderateScale(14),
         marginBottom: verticalScale(12),
@@ -248,7 +322,7 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.backgroundFaded,
         borderRadius: moderateScale(12),
         padding: moderateScale(16),
-        marginTop: verticalScale(20),
+        marginTop: verticalScale(10),
         borderTopWidth: 1,
         borderTopColor: Colors.borderLight,
     },
@@ -280,7 +354,7 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.backgroundLight,
     },
     checkoutButton: {
-        backgroundColor: Colors.button,
+        backgroundColor: "blue",
         paddingVertical: verticalScale(14),
         borderRadius: moderateScale(10),
         alignItems: 'center',

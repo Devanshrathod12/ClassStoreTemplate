@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View,
     Text,
@@ -8,145 +8,158 @@ import {
     ScrollView,
     TouchableOpacity,
     ActivityIndicator,
+    Image,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { showMessage } from 'react-native-flash-message';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../../styles/colors';
 import { scale, fontScale, verticalScale, moderateScale } from '../../styles/stylesconfig';
 import NavigationString from '../../Navigation/NavigationString';
 import { apiGet, apiPost } from '../../api/api';
 import AdaptiveSafeAreaView from '../AdaptiveSafeAreaView';
 
+const ASYNC_STORAGE_KEY = 'childCartData';
+const BOOKS_TO_PREVIEW = 3; // You can change this number to show more/less books in the preview
+
 const SelectPackageScreen = ({ route, navigation }) => {
     const { child } = route.params;
     const [packages, setPackages] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [AddedToCartIds, setAddedToCartIds] = useState([]);
+    const [childCarts, setChildCarts] = useState({});
+    const [apiCartItems, setApiCartItems] = useState([]);
 
     useFocusEffect(
         useCallback(() => {
-            const fetchPackagesAndBookOverviews = async () => {
-                if (!child?.classId) {
-                    showMessage({
-                        message: "Error",
-                        description: "Could not find class information for this child.",
-                        type: "danger",
-                    });
-                    setIsLoading(false);
-                    return;
-                }
-
+            const loadInitialData = async () => {
                 setIsLoading(true);
                 try {
-                    const bundleResponse = await apiGet(`/api/v1/bundle/class/${child.classId}`);
-                    if (bundleResponse && Array.isArray(bundleResponse)) {
+                    // --- STEP 1: Fetch all data concurrently ---
+                    const [storedCartsRaw, cartResponse, bundleResponse] = await Promise.all([
+                        AsyncStorage.getItem(ASYNC_STORAGE_KEY),
+                        apiGet('/api/v1/cart').catch(() => null),
+                        child.classId ? apiGet(`/api/v1/bundle/class/${child.classId}`) : Promise.resolve([])
+                    ]);
+                    
+                    let localChildCarts = storedCartsRaw ? JSON.parse(storedCartsRaw) : {};
+                    let currentApiItems = [];
+
+                    // --- STEP 2: Get the TRUE state of the cart from the API ---
+                    if (cartResponse && cartResponse.cart_id) {
+                        currentApiItems = await apiGet(`/api/v1/cart/${cartResponse.cart_id}/items`).catch(() => []);
+                        setApiCartItems(currentApiItems);
+                    }
+
+                    // --- STEP 3 (THE FIX): Synchronize AsyncStorage with the API cart ---
+                    const apiBundleIds = new Set(currentApiItems.map(item => String(item.bundle_id)));
+                    let isStorageDirty = false; // Flag to check if we need to update storage
+                    
+                    Object.keys(localChildCarts).forEach(childId => {
+                        const originalCount = localChildCarts[childId].length;
+                        // For each child, keep only the bundle IDs that actually exist in the API cart
+                        localChildCarts[childId] = localChildCarts[childId].filter(bundleId => apiBundleIds.has(String(bundleId)));
+                        
+                        if (localChildCarts[childId].length !== originalCount) {
+                            isStorageDirty = true;
+                        }
+                        // Clean up empty entries
+                        if (localChildCarts[childId].length === 0) {
+                            delete localChildCarts[childId];
+                        }
+                    });
+
+                    if (isStorageDirty) {
+                        console.log("SYNC: Discrepancy found. Cleaning AsyncStorage...");
+                        await AsyncStorage.setItem(ASYNC_STORAGE_KEY, JSON.stringify(localChildCarts));
+                    }
+                    
+                    // Use the cleaned, synchronized data for the UI state
+                    setChildCarts(localChildCarts);
+
+                    // --- STEP 4: Process and display bundles ---
+                    if (Array.isArray(bundleResponse)) {
                         const enhancedPackagesPromises = bundleResponse.map(async (pkg) => {
                             const price = parseFloat(pkg.price);
                             const discount = parseFloat(pkg.discount);
                             const originalPrice = price + discount;
-                            let bookOverviews = [];
+                            let booksPreview = [];
                             let totalBookCount = 0;
-
                             try {
                                 const bundleContents = await apiGet(`/api/v1/books-bundle/bundle/${pkg.bundle_id}`);
-                                if (bundleContents && Array.isArray(bundleContents) && bundleContents.length > 0) {
+                                if (Array.isArray(bundleContents) && bundleContents.length > 0) {
                                     totalBookCount = bundleContents.length;
-                                    const previewItems = bundleContents.slice(0, 4);
-                                    const bookDetailPromises = previewItems.map(item => apiGet(`/api/v1/book/${item.book_id}`));
-                                    const resolvedBookDetails = await Promise.all(bookDetailPromises);
-                                    bookOverviews = resolvedBookDetails
-                                        .filter(book => book)
-                                        .map(book => book.book_name);
+                                    const bookDetailPromises = bundleContents.slice(0, BOOKS_TO_PREVIEW).map(item => apiGet(`/api/v1/book/${item.book_id}`));
+                                    booksPreview = await Promise.all(bookDetailPromises);
                                 }
-                            } catch (error) {
-                                console.error(`Failed to fetch book overview for bundle ${pkg.bundle_id}:`, error);
-                            }
-
+                            } catch (error) {}
                             return {
-                                ...pkg,
-                                id: pkg.bundle_id,
-                                title: pkg.bundle_name,
-                                price: price,
-                                originalPrice: originalPrice,
-                                description: `A curated educational package for Class ${child.standard}.`,
-                                bookNames: bookOverviews,
-                                totalBooks: totalBookCount
+                                ...pkg, id: pkg.bundle_id, title: pkg.bundle_name, price, originalPrice,
+                                description: `A curated package for Class ${child.standard}.`,
+                                booksPreview: booksPreview.filter(Boolean), totalBooks: totalBookCount
                             };
                         });
-                        
-                        const finalPackages = await Promise.all(enhancedPackagesPromises);
-                        setPackages(finalPackages);
+                        setPackages(await Promise.all(enhancedPackagesPromises));
                     } else {
                         setPackages([]);
                     }
                 } catch (error) {
-                    console.error("Failed to fetch packages:", error);
-                    showMessage({
-                        message: "API Error",
-                        description: "Could not fetch available bundles.",
-                        type: "danger",
-                    });
+                    console.error("Failed to load screen data:", error);
+                    showMessage({ message: "Error", description: "Could not load page data.", type: "danger" });
                 } finally {
                     setIsLoading(false);
                 }
             };
 
-            fetchPackagesAndBookOverviews();
+            loadInitialData();
         }, [child])
     );
     
-    if (!child) {
-        return (
-            <SafeAreaView style={styles.container}>
-                <View style={styles.errorContainer}>
-                    <Text style={styles.errorText}>Error: Could not load child details.</Text>
-                    <TouchableOpacity onPress={() => navigation.goBack()}>
-                        <Text style={styles.goBackText}>Go Back</Text>
-                    </TouchableOpacity>
-                </View>
-            </SafeAreaView>
-        );
-    }
-
-    /*  AAPKA PURANA CODE COMMENT MEIN WAISA HI HAI
-    const HandleAddToCart = async (bundleId) => {
-        showMessage({ message: "Adding To Cart", type: "info" });
+    const handleAddToCart = async (bundleId) => {
+        showMessage({ message: "Adding To Cart...", type: "info" });
         try {
-            const expiresAt = new Date();
-            expiresAt.setDate(expiresAt.getDate() + 1);
-            const payload = {
-                bundle_id: String(bundleId),
-                quantity: 1,
-                expires_at: expiresAt.toISOString(),
-            };
-            await apiPost('/api/v1/cart', payload);
-            setAddedToCartIds(prevIds => [...prevIds, bundleId]);
-            showMessage({ message: "Success!", description: "Bundle added to your cart.", type: "success" });
+            const bundleIdStr = String(bundleId);
+            const isAlreadyInApiCart = apiCartItems.some(item => String(item.bundle_id) === bundleIdStr);
+
+            if (!isAlreadyInApiCart) {
+                const cart = await apiGet('/api/v1/cart');
+                if (!cart || !cart.cart_id) {
+                    showMessage({ message: "Error", description: "Could not find your cart.", type: "danger" });
+                    return;
+                }
+                const payload = { bundle_id: bundleIdStr, quantity: 1 };
+                await apiPost(`/api/v1/cart/${cart.cart_id}/items`, payload);
+            }
+            
+            const childIdStr = String(child.id);
+            const currentChildBundleIds = childCarts[childIdStr] || [];
+            if (currentChildBundleIds.includes(bundleIdStr)) {
+                showMessage({ message: "Already Added", type: "warning" });
+                return;
+            }
+
+            const newIdsForChild = [...currentChildBundleIds, bundleIdStr];
+            const newChildCartsState = { ...childCarts, [childIdStr]: newIdsForChild };
+
+            await AsyncStorage.setItem(ASYNC_STORAGE_KEY, JSON.stringify(newChildCartsState));
+            setChildCarts(newChildCartsState);
+
+            showMessage({ message: "Success!", description: "Bundle added to cart.", type: "success" });
         } catch (error) {
-            console.error("Failed to add to cart:", error.response?.data || error);
-            showMessage({ message: "Failed to Add", description: "Could not add the bundle to your cart.", type: "danger" });
+            console.error("Failed to add to cart:", error);
+            showMessage({ message: "Failed to Add", description: "Could not add bundle to cart.", type: "danger" });
         }
     };
-    */
     
+    // The render logic below remains the same as it correctly uses the synchronized state
     const renderPackage = (pkg) => {
         const savedAmount = pkg.originalPrice - pkg.price;
-        const isAdded = AddedToCartIds.includes(pkg.id);
+        const isAdded = (childCarts[String(child.id)] || []).includes(String(pkg.id));
         
         return (
-            <TouchableOpacity
-                key={pkg.id}
-                style={styles.packageCard}
-                activeOpacity={0.9}
-                // SIRF YEH LINE UPDATE KI GAYI HAI
-                onPress={() => navigation.navigate(NavigationString.ShowBooks, { 
-                    pkg: pkg,
-                    child: child
-                })}
-            >
-                <View style={styles.packageHeader}>
+            <View key={pkg.id} style={styles.packageCard}>
+                 <View style={styles.packageHeader}>
                     <View style={styles.packageInfo}>
                         <Text style={styles.packageTitle}>{pkg.title}</Text>
                         <Text style={styles.packageDescription}>{pkg.description}</Text>
@@ -162,23 +175,36 @@ const SelectPackageScreen = ({ route, navigation }) => {
                     </View>
                 </View>
 
-                {pkg.bookNames && pkg.bookNames.length > 0 && (
-                    <View style={styles.detailsSection}>
-                        <Text style={styles.detailTitle}><MaterialCommunityIcons name="bookshelf" /> Books Included ({pkg.totalBooks})</Text>
-                        {pkg.bookNames.map((bookName, index) => (
-                            <Text key={index} style={styles.detailItem} numberOfLines={1}>• {bookName}</Text>
+                {pkg.booksPreview && pkg.booksPreview.length > 0 && (
+                    <View style={styles.booksListSection}>
+                        <Text style={styles.detailTitle}>
+                            <MaterialCommunityIcons name="bookshelf" size={scale(16)} color={Colors.textDark} /> What's Inside? ({pkg.totalBooks} Items)
+                        </Text>
+                        {pkg.booksPreview.map(book => (
+                            <View key={book.book_id} style={styles.bookListItem}>
+                                <Image 
+                                    source={book.image_url ? { uri: book.image_url } : require('../../assets/book.png')}
+                                    style={styles.bookListImage}
+                                />
+                                <View style={styles.bookListInfo}>
+                                    <Text style={styles.bookListName} numberOfLines={1}>{book.book_name}</Text>
+                                    <View style={styles.subjectTag}>
+                                        <Text style={styles.subjectTagText}>{book.subject}</Text>
+                                    </View>
+                                </View>
+                                <Text style={styles.bookListPrice}>₹{parseFloat(book.price).toFixed(2)}</Text>
+                            </View>
                         ))}
-                        {pkg.totalBooks > pkg.bookNames.length && (
-                             <Text style={styles.detailItem}>• and {pkg.totalBooks - pkg.bookNames.length} more...</Text>
+                        {pkg.totalBooks > BOOKS_TO_PREVIEW && (
+                            <Text style={styles.moreBooksText}>and {pkg.totalBooks - BOOKS_TO_PREVIEW} more items...</Text>
                         )}
                     </View>
                 )}
 
-                {/* AAPKA PURANA BUTTONS WALA CODE COMMENT MEIN WAISA HI HAI */}
-                {/* <View style={styles.buttonRow}>
+                <View style={styles.actionButtonContainer}>
                     <TouchableOpacity 
-                        style={isAdded ? styles.addedToCartButton : styles.addToCartButton}
-                        onPress={() => HandleAddToCart(pkg.id)}
+                        style={[styles.buttonBase, isAdded ? styles.addedToCartButton : styles.addToCartButton]}
+                        onPress={() => handleAddToCart(pkg.id)}
                         disabled={isAdded}
                     >
                         {isAdded ? (
@@ -189,13 +215,13 @@ const SelectPackageScreen = ({ route, navigation }) => {
                         <Text style={isAdded ? styles.addedToCartButtonText : styles.addToCartButtonText}>{isAdded ? "Added" : "Add To Cart"}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity 
-                        style={styles.orderButton}
+                        style={[styles.buttonBase, styles.orderButton]}
                         onPress={() => navigation.navigate(NavigationString.DeliveryAddress, { child: child, pkg: pkg })}
                     >
                         <Text style={styles.orderButtonText}>Order Now</Text>
                     </TouchableOpacity>
-                </View> */}
-            </TouchableOpacity>
+                </View>
+            </View>
         );
     };
 
@@ -206,7 +232,7 @@ const SelectPackageScreen = ({ route, navigation }) => {
         if (packages.length === 0) {
             return (
                 <View style={styles.emptyContainer}>
-                    <Text style={styles.emptyText}>No bundles available for this class right now.</Text>
+                    <Text style={styles.emptyText}>No bundles available for this class.</Text>
                     <Text style={styles.emptySubText}>Please check back later.</Text>
                 </View>
             );
@@ -214,36 +240,43 @@ const SelectPackageScreen = ({ route, navigation }) => {
         return packages.map(pkg => renderPackage(pkg));
     };
 
+    if (!child) { return null; }
+
     return (
         <AdaptiveSafeAreaView>
-        <View style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor={Colors.backgroundLight} />
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <MaterialIcons name="arrow-back" size={scale(24)} color={Colors.textPrimary} />
-                </TouchableOpacity>
-                <View>
-                    <Text style={styles.headerTitle}>Select Bundle</Text>
-                    <Text style={styles.headerSubtitle}>For {child.name} • Class {child.standard}</Text>
-                </View>
-                <View style={{ width: scale(24) }} />
-            </View>
-            <ScrollView contentContainerStyle={styles.content}>
-                <View style={styles.childBanner}>
-                     <View style={styles.childIconCircle} />
+            <View style={styles.container}>
+                <StatusBar barStyle="dark-content" backgroundColor={Colors.backgroundLight} />
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => navigation.goBack()}>
+                        <MaterialIcons name="arrow-back" size={scale(24)} color={Colors.textPrimary} />
+                    </TouchableOpacity>
                     <View>
-                        <Text style={styles.childName}>{child.name}</Text>
-                        <Text style={styles.childDetails}>{child.age} years • {child.school_name}</Text>
+                        <Text style={styles.headerTitle}>Select Bundle</Text>
+                        <Text style={styles.headerSubtitle}>For {child.name} • Class {child.standard}</Text>
                     </View>
+                    <View style={{ width: scale(24) }} />
                 </View>
-                {renderContent()}
-            </ScrollView>
-        </View>
+                <ScrollView contentContainerStyle={styles.content}>
+                    <View style={styles.childBanner}>
+                         <View style={styles.childIconCircle} />
+                        <View>
+                            <Text style={styles.childName}>{child.name}</Text>
+                            <Text style={styles.childDetails}>Class {child.standard} • {child.school_name}</Text>
+                        </View>
+                    </View>
+
+                    <View>
+                        <Text style={styles.sectionHeader}>Available Learning Bundles</Text>
+                        <Text style={styles.sectionSubheader}>Choose the perfect set of books for {child.name}.</Text>
+                    </View>
+
+                    {renderContent()}
+                </ScrollView>
+            </View>
         </AdaptiveSafeAreaView>
     );
 };
-
-// ...AAPKE SAARE STYLES BINA KISI BADLAV KE...
+// --- STYLES (No changes needed) ---
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -319,7 +352,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: scale(16),
         borderRadius: moderateScale(12),
         marginTop: verticalScale(20),
-        marginBottom: verticalScale(20),
+        marginBottom: verticalScale(10),
     },
     childIconCircle: {
         width: scale(36),
@@ -339,8 +372,19 @@ const styles = StyleSheet.create({
         color: Colors.textLight,
         fontSize: fontScale(12),
     },
+    sectionHeader: {
+        fontSize: fontScale(18),
+        fontWeight: 'bold',
+        color: Colors.textDark,
+        marginTop: verticalScale(15),
+    },
+    sectionSubheader: {
+        fontSize: fontScale(13),
+        color: Colors.textSecondary,
+        marginBottom: verticalScale(20),
+    },
     packageCard: {
-        backgroundColor: Colors.WhiteBackgroudcolor,
+        backgroundColor: "white",
         borderRadius: moderateScale(12),
         padding: moderateScale(14),
         marginBottom: verticalScale(20),
@@ -395,7 +439,7 @@ const styles = StyleSheet.create({
         fontSize: fontScale(11),
         fontWeight: 'bold',
     },
-    detailsSection: {
+    booksListSection: {
         marginTop: verticalScale(12),
         paddingTop: verticalScale(12),
         borderTopWidth: 1,
@@ -405,31 +449,83 @@ const styles = StyleSheet.create({
         fontSize: fontScale(14),
         fontWeight: 'bold',
         color: Colors.textDark,
-        marginBottom: verticalScale(8),
+        marginBottom: verticalScale(15),
     },
-    detailItem: {
-        fontSize: fontScale(13),
-        color: Colors.textSecondary,
-        marginBottom: verticalScale(4),
-        marginLeft: scale(8),
-    },
-    buttonRow: {
+    bookListItem: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        marginTop: verticalScale(15),
+        marginBottom: verticalScale(12),
     },
-    addToCartButton: {
+    bookListImage: {
+        width: scale(50),
+        height: verticalScale(65),
+        borderRadius: moderateScale(6),
+        backgroundColor: Colors.borderLight,
+        marginRight: scale(12),
+    },
+    bookListInfo: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    bookListName: {
+        fontSize: fontScale(14),
+        fontWeight: '600',
+        color: Colors.textDark,
+    },
+    subjectTag: {
+        backgroundColor: Colors.backgroundPrimaryLight,
+        paddingHorizontal: scale(8),
+        paddingVertical: verticalScale(3),
+        borderRadius: moderateScale(10),
+        alignSelf: 'flex-start',
+        marginTop: verticalScale(4),
+    },
+    subjectTagText: {
+        color: Colors.primary,
+        fontSize: fontScale(10),
+        fontWeight: '600',
+    },
+    bookListPrice: {
+        fontSize: fontScale(13),
+        fontWeight: 'bold',
+        color: Colors.primary,
+    },
+    moreBooksText: {
+        fontSize: fontScale(12),
+        color: Colors.textMuted,
+        textAlign: 'center',
+        marginTop: verticalScale(5),
+        fontStyle: 'italic',
+    },
+    actionButtonContainer: {
+        marginTop: verticalScale(15),
+        paddingTop: verticalScale(15),
+        borderTopWidth: 1,
+        borderTopColor: Colors.borderLight,
+    },
+    buttonBase: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+        paddingVertical: verticalScale(12),
+        borderRadius: moderateScale(8),
+        width: '100%',
+    },
+    addToCartButton: {
         backgroundColor: Colors.backgroundLight,
         borderWidth: 1,
         borderColor: Colors.primary,
-        paddingVertical: verticalScale(12),
-        borderRadius: moderateScale(8),
-        flex: 1,
-        marginRight: scale(10),
+        marginBottom: verticalScale(10),
+        
+    },
+    addedToCartButton: {
+        backgroundColor: '#E8F5E9',
+        borderWidth: 1,
+        borderColor: Colors.success,
+        marginBottom: verticalScale(10),
+    },
+    orderButton: {
+        backgroundColor: "blue",
     },
     addToCartButtonText: {
         color: Colors.primary,
@@ -437,37 +533,16 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         marginLeft: scale(8),
     },
-    orderButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: Colors.button,
-        paddingVertical: verticalScale(12),
-        borderRadius: moderateScale(8),
-        flex: 1,
-    },
-    orderButtonText: {
-        color: Colors.textLight,
-        fontSize: fontScale(16),
-        fontWeight: 'bold',
-    },
-     addedToCartButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#E8F5E9',
-        borderWidth: 1,
-        borderColor: Colors.success,
-        paddingVertical: verticalScale(12),
-        borderRadius: moderateScale(8),
-        flex: 1,
-        marginRight: scale(10),
-    },
     addedToCartButtonText: {
         color: Colors.success,
         fontSize: fontScale(16),
         fontWeight: 'bold',
         marginLeft: scale(8),
+    },
+    orderButtonText: {
+        color: Colors.textLight,
+        fontSize: fontScale(16),
+        fontWeight: 'bold',
     },
 });
 

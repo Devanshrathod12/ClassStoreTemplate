@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react'; // <-- FIX: Corrected this import line
 import {
   View,
   Text,
@@ -39,7 +39,7 @@ const PaymentDetailes = ({ route, navigation }) => {
   const total = subtotal + deliveryFee;
 
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       const fetchData = async () => {
         setIsDataLoading(true);
         try {
@@ -66,7 +66,8 @@ const PaymentDetailes = ({ route, navigation }) => {
               description: 'Please add a delivery address to continue.',
               type: 'warning',
             });
-            navigation.navigate(NavigationString.DeliveryAddress);
+            // Redirect to add an address, passing orderData to return here later
+            navigation.navigate(NavigationString.DeliveryAddress, { orderData });
           }
         } catch (error) {
           console.error('Failed to fetch addresses:', error);
@@ -110,7 +111,8 @@ const PaymentDetailes = ({ route, navigation }) => {
             description: 'Please add a new address.',
             type: 'warning',
           });
-          navigation.navigate(NavigationString.DeliveryAddress);
+          // Redirect to add an address, passing orderData to return here later
+          navigation.navigate(NavigationString.DeliveryAddress, { orderData });
         }
       }
     } catch (error) {
@@ -126,17 +128,16 @@ const PaymentDetailes = ({ route, navigation }) => {
       showMessage({ message: 'Missing Information', description: 'Please select a delivery address.', type: 'warning' });
       return;
     }
-    if (!deliveryNotes.trim()) {
-      showMessage({ message: 'Missing Information', description: 'Delivery notes are required.', type: 'warning' });
-      return;
-    }
+    
+    // --- FIX: Removed the validation check for delivery notes ---
+    
     setIsLoading(true);
     try {
       const userPhoneNumber = await AsyncStorage.getItem('mobile_number');
       if (!userPhoneNumber) {
         showMessage({
           message: 'Authentication Error',
-          description: 'Your phone number could not be found. Please try logging in again.',
+          description: 'Your phone number could not be found. Please log in again.',
           type: 'danger',
         });
         setIsLoading(false);
@@ -145,7 +146,7 @@ const PaymentDetailes = ({ route, navigation }) => {
       const payload = {
         delivery_address: `${selectedSavedAddress.address_line1}, ${selectedSavedAddress.city}, ${selectedSavedAddress.state} - ${selectedSavedAddress.pincode}`,
         delivery_phone: userPhoneNumber,
-        delivery_notes: deliveryNotes,
+        delivery_notes: deliveryNotes.trim(), // Send notes if they exist, otherwise an empty string
         payment_method: paymentMethod,
       };
       const createdOrder = await apiPost('/api/v1/orders', payload);
@@ -281,7 +282,7 @@ const PaymentDetailes = ({ route, navigation }) => {
             ))}
             <TextInput
               style={styles.notesInput}
-              placeholder="Delivery Notes *"
+              placeholder="Delivery Notes (Optional)" // <-- FIX: Updated placeholder text
               value={deliveryNotes}
               onChangeText={setDeliveryNotes}
             />
@@ -347,6 +348,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: moderateScale(16),
     backgroundColor: Colors.backgroundLight,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
   },
   headerTitle: {
     fontSize: fontScale(18),
@@ -356,14 +359,17 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     padding: scale(16),
-    backgroundColor: Colors.backgroundLight,
   },
   card: {
-    backgroundColor: Colors.WhiteBackgroudcolor,
+    backgroundColor: 'white',
     borderRadius: moderateScale(12),
     padding: moderateScale(14),
     marginBottom: verticalScale(20),
     elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   sectionTitle: {
     fontSize: fontScale(15),
@@ -447,7 +453,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     padding: moderateScale(16),
-    backgroundColor: Colors.WhiteBackgroudcolor,
+    backgroundColor: 'white',
     borderTopWidth: 1,
     borderTopColor: Colors.borderLight,
   },
