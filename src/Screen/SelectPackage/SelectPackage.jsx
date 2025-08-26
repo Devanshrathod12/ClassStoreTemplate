@@ -22,7 +22,7 @@ import { apiGet, apiPost } from '../../api/api';
 import AdaptiveSafeAreaView from '../AdaptiveSafeAreaView';
 
 const ASYNC_STORAGE_KEY = 'childCartData';
-const BOOKS_TO_PREVIEW = 3; // You can change this number to show more/less books in the preview
+const BOOKS_TO_PREVIEW = 8;
 
 const SelectPackageScreen = ({ route, navigation }) => {
     const { child } = route.params;
@@ -36,7 +36,6 @@ const SelectPackageScreen = ({ route, navigation }) => {
             const loadInitialData = async () => {
                 setIsLoading(true);
                 try {
-                    // --- STEP 1: Fetch all data concurrently ---
                     const [storedCartsRaw, cartResponse, bundleResponse] = await Promise.all([
                         AsyncStorage.getItem(ASYNC_STORAGE_KEY),
                         apiGet('/api/v1/cart').catch(() => null),
@@ -46,25 +45,21 @@ const SelectPackageScreen = ({ route, navigation }) => {
                     let localChildCarts = storedCartsRaw ? JSON.parse(storedCartsRaw) : {};
                     let currentApiItems = [];
 
-                    // --- STEP 2: Get the TRUE state of the cart from the API ---
                     if (cartResponse && cartResponse.cart_id) {
                         currentApiItems = await apiGet(`/api/v1/cart/${cartResponse.cart_id}/items`).catch(() => []);
                         setApiCartItems(currentApiItems);
                     }
 
-                    // --- STEP 3 (THE FIX): Synchronize AsyncStorage with the API cart ---
                     const apiBundleIds = new Set(currentApiItems.map(item => String(item.bundle_id)));
-                    let isStorageDirty = false; // Flag to check if we need to update storage
+                    let isStorageDirty = false;
                     
                     Object.keys(localChildCarts).forEach(childId => {
                         const originalCount = localChildCarts[childId].length;
-                        // For each child, keep only the bundle IDs that actually exist in the API cart
                         localChildCarts[childId] = localChildCarts[childId].filter(bundleId => apiBundleIds.has(String(bundleId)));
                         
                         if (localChildCarts[childId].length !== originalCount) {
                             isStorageDirty = true;
                         }
-                        // Clean up empty entries
                         if (localChildCarts[childId].length === 0) {
                             delete localChildCarts[childId];
                         }
@@ -75,10 +70,8 @@ const SelectPackageScreen = ({ route, navigation }) => {
                         await AsyncStorage.setItem(ASYNC_STORAGE_KEY, JSON.stringify(localChildCarts));
                     }
                     
-                    // Use the cleaned, synchronized data for the UI state
                     setChildCarts(localChildCarts);
 
-                    // --- STEP 4: Process and display bundles ---
                     if (Array.isArray(bundleResponse)) {
                         const enhancedPackagesPromises = bundleResponse.map(async (pkg) => {
                             const price = parseFloat(pkg.price);
@@ -151,8 +144,45 @@ const SelectPackageScreen = ({ route, navigation }) => {
             showMessage({ message: "Failed to Add", description: "Could not add bundle to cart.", type: "danger" });
         }
     };
+
+    const handleOrderNow = async (pkg) => {
+        showMessage({ message: "Preparing Order...", type: "info" });
+        try {
+            const bundleIdStr = String(pkg.id);
+            const isAlreadyInApiCart = apiCartItems.some(item => String(item.bundle_id) === bundleIdStr);
+
+            if (!isAlreadyInApiCart) {
+                const cart = await apiGet('/api/v1/cart');
+                if (!cart || !cart.cart_id) {
+                    showMessage({ message: "Error", description: "Could not find your cart.", type: "danger" });
+                    return;
+                }
+                const payload = { bundle_id: bundleIdStr, quantity: 1 };
+                await apiPost(`/api/v1/cart/${cart.cart_id}/items`, payload);
+            }
+
+            const childIdStr = String(child.id);
+            const currentChildBundleIds = childCarts[childIdStr] || [];
+            if (!currentChildBundleIds.includes(bundleIdStr)) {
+                const newIdsForChild = [...currentChildBundleIds, bundleIdStr];
+                const newChildCartsState = { ...childCarts, [childIdStr]: newIdsForChild };
+                await AsyncStorage.setItem(ASYNC_STORAGE_KEY, JSON.stringify(newChildCartsState));
+                setChildCarts(newChildCartsState);
+            }
+
+            const orderData = {
+                isFromCart: false,
+                pkg: pkg,
+                child: child
+            };
+
+            navigation.navigate(NavigationString.PaymentDetailes, { orderData });
+        } catch (error) {
+            console.error("Failed to prepare order:", error);
+            showMessage({ message: "Failed to Order", description: "Could not prepare order.", type: "danger" });
+        }
+    };
     
-    // The render logic below remains the same as it correctly uses the synchronized state
     const renderPackage = (pkg) => {
         const savedAmount = pkg.originalPrice - pkg.price;
         const isAdded = (childCarts[String(child.id)] || []).includes(String(pkg.id));
@@ -216,7 +246,7 @@ const SelectPackageScreen = ({ route, navigation }) => {
                     </TouchableOpacity>
                     <TouchableOpacity 
                         style={[styles.buttonBase, styles.orderButton]}
-                        onPress={() => navigation.navigate(NavigationString.DeliveryAddress, { child: child, pkg: pkg })}
+                        onPress={() => handleOrderNow(pkg)}
                     >
                         <Text style={styles.orderButtonText}>Order Now</Text>
                     </TouchableOpacity>
@@ -276,7 +306,7 @@ const SelectPackageScreen = ({ route, navigation }) => {
         </AdaptiveSafeAreaView>
     );
 };
-// --- STYLES (No changes needed) ---
+
 const styles = StyleSheet.create({
     container: {
         flex: 1,

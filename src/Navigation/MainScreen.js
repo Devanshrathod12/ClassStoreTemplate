@@ -68,6 +68,11 @@ export default function (Stack, isTokenValid, onLoginSuccess,onLogout) {
         component={Screen.OrderDetails}
         options={{ headerShown: false }}
       />
+      <Stack.Screen
+        name={NavigationString.AddAddress}
+        component={Screen.AddAddress}
+        options={{ headerShown: false }}
+      />
     </>
   );
 }

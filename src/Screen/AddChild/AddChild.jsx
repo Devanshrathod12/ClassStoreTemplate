@@ -618,6 +618,9 @@ const AddChildScreen = ({ route, navigation, onLogout }) => {
                 <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
                   <Text style={styles.skipButtonText}>Skip</Text>
                 </TouchableOpacity>
+                  <TouchableOpacity onPress={onLogout}>
+                  <Text>Log Out</Text>
+                </TouchableOpacity>
               </View>
             </View>
           </View>

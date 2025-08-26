@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
@@ -7,90 +7,63 @@ import {
     ScrollView,
     TouchableOpacity,
     ActivityIndicator,
+    Image,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { showMessage } from 'react-native-flash-message';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../../styles/colors';
 import { scale, fontScale, verticalScale, moderateScale } from '../../styles/stylesconfig';
-import { apiGet, apiDelete } from '../../api/api';
+import { apiGet, apiDelete, apiPut } from '../../api/api';
 import AdaptiveSafeAreaView from '../AdaptiveSafeAreaView';
+import NavigationString from '../../Navigation/NavigationString';
 
-const ASYNC_STORAGE_KEY = 'childCartData';
 
 const MyCartScreen = ({ navigation }) => {
-    const [cartDataByChild, setCartDataByChild] = useState([]);
+    const [cartItems, setCartItems] = useState([]);
     const [cartDetails, setCartDetails] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    // This function remains correct. It properly reads the API and AsyncStorage.
     const fetchCartData = useCallback(async () => {
         setIsLoading(true);
         try {
-            const userId = await AsyncStorage.getItem('userId');
-            if (!userId) {
-                setCartDataByChild([]);
-                setCartDetails(null);
-                setIsLoading(false);
-                return;
-            }
-
-            const [cartResponse, childrenResponse, childCartsString] = await Promise.all([
-                apiGet('/api/v1/cart').catch(() => null),
-                apiGet(`/api/v1/children/user/${userId}`),
-                AsyncStorage.getItem(ASYNC_STORAGE_KEY)
-            ]);
-
-            const childCarts = childCartsString ? JSON.parse(childCartsString) : {};
+            const cartResponse = await apiGet('/api/v1/cart').catch(() => null);
 
             if (cartResponse && cartResponse.cart_id) {
                 setCartDetails(cartResponse);
-                
+
                 const itemsResponse = await apiGet(`/api/v1/cart/${cartResponse.cart_id}/items`).catch(() => []);
 
                 if (Array.isArray(itemsResponse) && itemsResponse.length > 0) {
                     const enrichedItems = await Promise.all(
                         itemsResponse.map(async (item) => {
                             const bundleDetails = await apiGet(`/api/v1/bundle/${item.bundle_id}`).catch(() => null);
+                            const unitPrice = parseFloat(item.unit_price);
+                            const discount = parseFloat(bundleDetails?.discount || 0);
+                            const originalPrice = unitPrice + discount;
+
                             return {
                                 ...item,
                                 bundle_name: bundleDetails?.bundle_name || 'Unknown Bundle',
+                                original_price: originalPrice,
+                                discount_amount: discount,
                             };
                         })
                     );
-                    
-                    const itemDetailsMap = new Map();
-                    enrichedItems.forEach(item => itemDetailsMap.set(String(item.bundle_id), item));
-
-                    const structuredData = childrenResponse
-                        .map(child => {
-                            const childIdStr = String(child.id);
-                            const bundleIdsForChild = childCarts[childIdStr] || [];
-                            const itemsForChild = bundleIdsForChild
-                                .map(bundleId => itemDetailsMap.get(String(bundleId)))
-                                .filter(Boolean);
-
-                            return {
-                                childInfo: child,
-                                items: itemsForChild,
-                            };
-                        })
-                        .filter(group => group.items.length > 0);
-
-                    setCartDataByChild(structuredData);
+                    setCartItems(enrichedItems);
                 } else {
-                    setCartDataByChild([]);
+                    setCartItems([]);
                 }
             } else {
-                setCartDataByChild([]);
+                setCartItems([]);
                 setCartDetails(null);
             }
         } catch (error) {
             console.error("Failed to fetch cart items:", error);
             showMessage({ message: "Error", description: "Could not load your cart.", type: 'danger' });
-            setCartDataByChild([]);
+            setCartItems([]);
         } finally {
             setIsLoading(false);
         }
@@ -102,45 +75,47 @@ const MyCartScreen = ({ navigation }) => {
         }, [fetchCartData])
     );
 
-    // --- LOGIC CORRECTION: This function is now updated ---
-    const handleDeleteItem = async (cartItemId, bundleId, childId) => {
+    const handleDeleteItem = async (cartItemId) => {
         showMessage({ message: "Removing item...", type: "info" });
         try {
-            // 1. Delete the item from the API. This removes it from the central cart.
             await apiDelete(`/api/v1/cart/items/${cartItemId}`);
-            
-            // 2. (THE FIX) Remove the link to this bundle from ALL children in AsyncStorage.
-            const childCartsRaw = await AsyncStorage.getItem(ASYNC_STORAGE_KEY);
-            let childCarts = childCartsRaw ? JSON.parse(childCartsRaw) : {};
-            
-            console.log(`Deleting bundle ${bundleId} from all children in AsyncStorage.`);
-
-            // Iterate over every child in the storage object
-            for (const key in childCarts) {
-                // Filter out the deleted bundleId from each child's list
-                childCarts[key] = childCarts[key].filter(id => String(id) !== String(bundleId));
-            }
-            
-            // Optional: Clean up any children who now have an empty list
-            const cleanedChildCarts = Object.entries(childCarts)
-                .filter(([_, bundles]) => bundles.length > 0)
-                .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {});
-
-            await AsyncStorage.setItem(ASYNC_STORAGE_KEY, JSON.stringify(cleanedChildCarts));
-            
             showMessage({ message: "Success", description: "Item removed from your cart.", type: "success" });
-            
-            // 3. Refresh data from the server. The cart will now be empty.
             fetchCartData();
-
         } catch (error) {
             console.error("Failed to delete item:", error);
-            const errorMessage = error.response?.data?.detail || "Could not remove the item.";
-            showMessage({ message: "Error", description: errorMessage, type: "danger" });
+            showMessage({ message: "Error", description: "Could not remove the item.", type: "danger" });
         }
     };
 
-    // --- No changes are needed below this line ---
+    const handleUpdateQuantity = async (cartItemId, newQuantity) => {
+        if (newQuantity < 1) {
+            handleDeleteItem(cartItemId);
+            return;
+        }
+        const originalItems = [...cartItems];
+        setCartItems(prev => prev.map(item => item.cart_item_id === cartItemId ? { ...item, quantity: newQuantity } : item));
+
+        try {
+            await apiPut(`/api/v1/cart/items/${cartItemId}`, { quantity: newQuantity });
+            fetchCartData();
+        } catch (error) {
+            console.error("Failed to update quantity:", error);
+            showMessage({ message: "Error", description: "Could not update quantity.", type: "danger" });
+            setCartItems(originalItems);
+        }
+    };
+    
+    const handleProceedToCheckout = () => {
+        const orderData = {
+            isFromCart: true,
+            cart: {
+                items: cartItems,
+                quantity: cartDetails?.quantity || 0,
+                total_amount: cartDetails?.total || 0,
+            }
+        };
+        navigation.navigate(NavigationString.PaymentDetailes, { orderData });
+    };
 
     const renderHeader = () => (
         <View style={styles.header}>
@@ -152,40 +127,54 @@ const MyCartScreen = ({ navigation }) => {
         </View>
     );
 
-    const renderCartItem = (item, childId) => (
-        <View key={`${childId}-${item.cart_item_id}`} style={styles.itemCard}>
-            <View style={styles.itemDetails}>
+    const renderCartItem = (item) => (
+        <View key={item.cart_item_id} style={styles.itemCard}>
+            <View style={styles.itemDetailsSection}>
                 <Text style={styles.itemName} numberOfLines={2}>{item.bundle_name}</Text>
-                <Text style={styles.itemPrice}>₹{parseFloat(item.unit_price).toFixed(2)}</Text>
+                
+                <View style={styles.priceBreakdown}>
+                    <Text style={styles.itemOriginalPrice}>MRP: ₹{(item.original_price || 0).toFixed(2)}</Text>
+                    <Text style={styles.itemDiscount}>Discount: - ₹{(item.discount_amount || 0).toFixed(2)}</Text>
+                    <Text style={styles.itemPricePerUnit}>Price / item: ₹{(parseFloat(item.unit_price) || 0).toFixed(2)}</Text>
+                </View>
+
+                <View style={styles.quantityControl}>
+                    <TouchableOpacity style={styles.quantityButton} onPress={() => handleUpdateQuantity(item.cart_item_id, item.quantity - 1)}>
+                        <MaterialCommunityIcons name="minus" size={scale(18)} color={Colors.textPrimary} />
+                    </TouchableOpacity>
+                    <Text style={styles.itemQuantityValue}>{item.quantity}</Text>
+                    <TouchableOpacity style={styles.quantityButton} onPress={() => handleUpdateQuantity(item.cart_item_id, item.quantity + 1)}>
+                        <MaterialCommunityIcons name="plus" size={scale(18)} color={Colors.textPrimary} />
+                    </TouchableOpacity>
+                </View>
             </View>
-            <View style={styles.itemActions}>
-                <Text style={styles.itemQuantity}>Qty: {item.quantity}</Text>
-                <TouchableOpacity onPress={() => handleDeleteItem(item.cart_item_id, item.bundle_id, childId)}>
-                    <MaterialCommunityIcons name="delete-outline" size={scale(22)} color={Colors.danger} />
+            <View style={styles.itemTotalSection}>
+                 <TouchableOpacity onPress={() => handleDeleteItem(item.cart_item_id)}>
+                    <MaterialCommunityIcons name="delete-outline" size={scale(24)} color={Colors.danger} />
                 </TouchableOpacity>
+                <Text style={styles.itemTotalPriceLabel}>Total</Text>
+                <Text style={styles.itemTotalPrice}>₹{(parseFloat(item.total) || 0).toFixed(2)}</Text>
             </View>
         </View>
     );
 
-    const renderSummary = () => (
-        <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Order Summary</Text>
-            <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Total Items</Text>
-                <Text style={styles.summaryValue}>{cartDetails?.quantity || 0}</Text>
+    const renderSummary = () => {
+        const finalTotal = parseFloat(cartDetails?.total || 0);
+        
+        return (
+            <View style={styles.summaryCard}>
+                <Text style={styles.summaryTitle}>Order Summary</Text>
+                <View style={styles.grandTotalRow}>
+                    <Text style={styles.grandTotalLabel}>Grand Total ({cartDetails?.quantity || 0} items)</Text>
+                    <Text style={styles.grandTotalValue}>₹{finalTotal.toFixed(2)}</Text>
+                </View>
             </View>
-            <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Total Amount</Text>
-                <Text style={styles.summaryValue}>₹{parseFloat(cartDetails?.total_amount || 0).toFixed(2)}</Text>
-            </View>
-        </View>
-    );
+        );
+    };
 
     const renderContent = () => {
-        if (isLoading) {
-            return <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 50 }} />;
-        }
-        if (cartDataByChild.length === 0) {
+        if (isLoading) return <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 50 }} />;
+        if (!cartItems || cartItems.length === 0) {
             return (
                 <View style={styles.emptyContainer}>
                     <MaterialCommunityIcons name="cart-off" size={scale(60)} color={Colors.textMuted} />
@@ -196,12 +185,7 @@ const MyCartScreen = ({ navigation }) => {
         }
         return (
             <>
-                {cartDataByChild.map(childGroup => (
-                    <View key={childGroup.childInfo.id} style={styles.childSection}>
-                        <Text style={styles.childSectionHeader}>Items for {childGroup.childInfo.name}</Text>
-                        {childGroup.items.map(item => renderCartItem(item, childGroup.childInfo.id))}
-                    </View>
-                ))}
+                {cartItems.map(item => renderCartItem(item))}
                 {renderSummary()}
             </>
         );
@@ -215,9 +199,9 @@ const MyCartScreen = ({ navigation }) => {
                 <ScrollView contentContainerStyle={styles.content}>
                     {renderContent()}
                 </ScrollView>
-                {!isLoading && cartDataByChild.length > 0 && (
+                {!isLoading && cartItems.length > 0 && (
                     <View style={styles.footer}>
-                        <TouchableOpacity onPress={() => navigation.navigate("Delivery")} style={styles.checkoutButton}>
+                        <TouchableOpacity onPress={handleProceedToCheckout} style={styles.checkoutButton}>
                             <Text style={styles.checkoutButtonText}>Proceed to Checkout</Text>
                         </TouchableOpacity>
                     </View>
@@ -228,109 +212,97 @@ const MyCartScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: Colors.backgroundLight,
-    },
-    header: {
+    container: { flex: 1, backgroundColor: Colors.backgroundLight },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: moderateScale(16), borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
+    headerTitle: { fontSize: fontScale(18), fontWeight: 'bold', color: Colors.textPrimary },
+    content: { flexGrow: 1, padding: scale(16) },
+    emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: verticalScale(100) },
+    emptyText: { fontSize: fontScale(18), fontWeight: 'bold', color: Colors.textPrimary, marginTop: verticalScale(15) },
+    emptySubText: { fontSize: fontScale(14), color: Colors.textMuted, marginTop: verticalScale(5), textAlign: 'center', paddingHorizontal: scale(20) },
+    
+    itemCard: {
         flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: moderateScale(16),
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.borderLight,
+        backgroundColor: "white",
+        borderRadius: moderateScale(12),
+        padding: moderateScale(12),
+        marginBottom: verticalScale(16),
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
     },
-    headerTitle: {
-        fontSize: fontScale(18),
-        fontWeight: 'bold',
-        color: Colors.textPrimary,
-    },
-    content: {
-        flexGrow: 1,
-        padding: scale(16),
-    },
-    emptyContainer: {
+    itemDetailsSection: {
         flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingVertical: verticalScale(100),
+        justifyContent: 'space-between',
     },
-    emptyText: {
-        fontSize: fontScale(18),
-        fontWeight: 'bold',
-        color: Colors.textPrimary,
-        marginTop: verticalScale(15),
-    },
-    emptySubText: {
-        fontSize: fontScale(14),
-        color: Colors.textMuted,
-        marginTop: verticalScale(5),
-        textAlign: 'center',
-        paddingHorizontal: scale(20),
-    },
-    childSection: {
-        marginBottom: verticalScale(20),
-    },
-    childSectionHeader: {
+    itemName: {
         fontSize: fontScale(16),
         fontWeight: 'bold',
         color: Colors.textDark,
+        marginBottom: verticalScale(8),
+    },
+    priceBreakdown: {
         marginBottom: verticalScale(10),
-        paddingBottom: verticalScale(5),
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.borderLight,
     },
-    itemCard: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        backgroundColor: "white",
-        borderRadius: moderateScale(12),
-        padding: moderateScale(14),
-        marginBottom: verticalScale(12),
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
+    itemOriginalPrice: {
+        fontSize: fontScale(13),
+        color: Colors.textMuted,
+        textDecorationLine: 'line-through',
     },
-    itemDetails: {
-        flex: 1,
-        marginRight: scale(10),
-    },
-    itemName: {
-        fontSize: fontScale(15),
-        fontWeight: 'bold',
-        color: Colors.textDark,
-    },
-    itemPrice: {
-        fontSize: fontScale(14),
-        color: Colors.textSecondary,
-        marginTop: verticalScale(4),
-    },
-    itemActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    itemQuantity: {
-        fontSize: fontScale(14),
+    itemDiscount: {
+        fontSize: fontScale(13),
+        color: Colors.success,
         fontWeight: '500',
-        color: Colors.textPrimary,
-        marginRight: scale(15),
     },
+    itemPricePerUnit: {
+        fontSize: fontScale(13),
+        color: Colors.textSecondary,
+        fontWeight: '500',
+    },
+    quantityControl: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.background,
+        borderRadius: moderateScale(8),
+        alignSelf: 'flex-start',
+    },
+    quantityButton: {
+        padding: scale(8),
+    },
+    itemQuantityValue: {
+        fontSize: fontScale(16),
+        fontWeight: '600',
+        color: Colors.textPrimary,
+        marginHorizontal: scale(12),
+    },
+    itemTotalSection: {
+        alignItems: 'flex-end',
+        justifyContent: 'space-between',
+        paddingLeft: scale(10),
+    },
+    itemTotalPriceLabel: {
+        fontSize: fontScale(12),
+        color: Colors.textSecondary,
+    },
+    itemTotalPrice: {
+        fontSize: fontScale(18),
+        fontWeight: 'bold',
+        color: Colors.textPrimary,
+    },
+
     summaryCard: {
-        backgroundColor: Colors.backgroundFaded,
+        backgroundColor: "white",
         borderRadius: moderateScale(12),
         padding: moderateScale(16),
         marginTop: verticalScale(10),
-        borderTopWidth: 1,
-        borderTopColor: Colors.borderLight,
+        elevation: 1,
     },
     summaryTitle: {
         fontSize: fontScale(16),
         fontWeight: 'bold',
         color: Colors.textPrimary,
-        marginBottom: verticalScale(12),
+        marginBottom: verticalScale(15),
     },
     summaryRow: {
         flexDirection: 'row',
@@ -344,9 +316,29 @@ const styles = StyleSheet.create({
     },
     summaryValue: {
         fontSize: fontScale(14),
-        fontWeight: 'bold',
+        fontWeight: '500',
         color: Colors.textDark,
     },
+    grandTotalRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: verticalScale(10),
+        paddingTop: verticalScale(10),
+        borderTopWidth: 1,
+        borderTopColor: Colors.borderLight
+    },
+    grandTotalLabel: {
+        fontSize: fontScale(16),
+        fontWeight: 'bold',
+        color: Colors.textPrimary,
+    },
+    grandTotalValue: {
+        fontSize: fontScale(18),
+        fontWeight: 'bold',
+        color: Colors.textPrimary,
+    },
+    
     footer: {
         padding: moderateScale(16),
         borderTopWidth: 1,
@@ -354,7 +346,7 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.backgroundLight,
     },
     checkoutButton: {
-        backgroundColor: "blue",
+        backgroundColor: Colors.primary,
         paddingVertical: verticalScale(14),
         borderRadius: moderateScale(10),
         alignItems: 'center',

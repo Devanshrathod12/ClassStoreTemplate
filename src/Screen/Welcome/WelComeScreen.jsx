@@ -13,7 +13,6 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import { showMessage } from 'react-native-flash-message';
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../../styles/colors';
 import {
@@ -109,6 +108,9 @@ const CustomOtpInput = ({ numberOfInputs = 6, onCodeFilled, onCodeChange }) => {
                 selectTextOnFocus
                 caretHidden={true}
               />
+              {focusedIndex === index && code[index] === '' && (
+                <View style={styles.cursor} />
+              )}
             </View>
           </TouchableWithoutFeedback>
         ))}
@@ -266,22 +268,10 @@ const WelcomeScreen = ({ onLoginSuccess }) => {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.headerContainer}>
-            {/* <View style={styles.logoContainer}>
-              <MaterialCommunityIcons
-                name="book-open-variant"
-                size={scale(35)}
-                color={Colors.textLight}
-              />
-            </View> */}
-            <Text style={styles.appName}>ClassStore</Text>
-            <Text style={styles.tagline}>Your digital learning companion</Text>
-          </View>
-
           <View style={styles.formContainer}>
-            <Text style={styles.formTitle}>Welcome Back!</Text>
+            <Text style={styles.formTitle}> Login / Signup</Text>
             <Text style={styles.formSubtitle}>
-              Sign in to access your learning journey
+               access your learning journey
             </Text>
 
             <View style={styles.inputContainer}>
@@ -294,17 +284,21 @@ const WelcomeScreen = ({ onLoginSuccess }) => {
                 )}
               </View>
               <View style={styles.phoneInput}>
-                <Text style={styles.countryCode}>+91</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="1234567890"
-                  placeholderTextColor={Colors.textMuted}
-                  keyboardType="phone-pad"
-                  editable={!otpSent}
-                  value={mobileNumber}
-                  onChangeText={setMobileNumber}
-                  maxLength={10}
-                />
+                  <View style={styles.countryContainer}>
+                      <Text style={styles.countryFlag}>🇮🇳</Text>
+                      <Text style={styles.countryCode}>+91</Text>
+                      <View style={styles.verticalLine} />
+                  </View>
+                  <TextInput
+                      style={styles.input}
+                      placeholder=""
+                      placeholderTextColor={Colors.textMuted}
+                      keyboardType="phone-pad"
+                      editable={!otpSent}
+                      value={mobileNumber}
+                      onChangeText={setMobileNumber}
+                      maxLength={10}
+                  />
               </View>
             </View>
 
@@ -383,26 +377,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(20),
     paddingVertical: verticalScale(20),
   },
-  headerContainer: { alignItems: 'center', marginBottom: verticalScale(20) },
-  logoContainer: {
-    width: scale(70),
-    height: scale(70),
-    borderRadius: moderateScale(18),
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: verticalScale(15),
-  },
-  appName: {
-    fontSize: fontScale(28),
-    fontWeight: 'bold',
-    color: Colors.textPrimary,
-  },
-  tagline: {
-    fontSize: fontScale(14),
-    color: Colors.textSecondary,
-    marginTop: verticalScale(5),
-  },
   formContainer: {
     width: '100%',
     backgroundColor: Colors.WhiteBackgroudcolor,
@@ -463,17 +437,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(10),
     backgroundColor: Colors.WhiteBackgroudcolor,
   },
+  countryContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: scale(8),
+  },
+  countryFlag: {
+    fontSize: fontScale(24),
+  },
   countryCode: {
     fontSize: fontScale(16),
     color: Colors.textDark,
-    marginRight: scale(8),
     fontWeight: '500',
+    marginLeft: scale(8),
+  },
+  verticalLine: {
+      width: 1,
+      height: '60%',
+      backgroundColor: Colors.border,
+      marginLeft: scale(10),
   },
   input: {
     flex: 1,
     fontSize: fontScale(16),
     color: Colors.textDark,
     height: verticalScale(45),
+    marginLeft: scale(4)
   },
   button: {
     width: '100%',
@@ -521,6 +510,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.backgroundFaded,
+    position: 'relative',
   },
   otpBoxFocused: {
     borderColor: Colors.primary,
@@ -533,6 +523,13 @@ const styles = StyleSheet.create({
     color: Colors.textDark,
     textAlign: 'center',
     width: '100%',
+  },
+   cursor: {
+    position: 'absolute',
+    width: 2,
+    height: scale(25),
+    backgroundColor: Colors.primary,
+    borderRadius: 1,
   },
   termsText: {
     fontSize: fontScale(11),

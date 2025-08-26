@@ -61,8 +61,8 @@ const DeliveryAddress = ({ route, navigation }) => {
     }, [route.params, navigation]);
 
     const subtotal = orderData ? (orderData.isFromCart ? parseFloat(orderData.cart.total_amount) : orderData.pkg.price) : 0;
-    const deliveryFee = 49;
-    const total = subtotal + deliveryFee;
+    // Removed deliveryFee and updated total calculation
+    const total = subtotal; // Delivery fee removed
 
     const getInitials = (name) => {
         if (!name) return '';
@@ -124,8 +124,8 @@ const DeliveryAddress = ({ route, navigation }) => {
                         <View style={styles.itemRow}>
                             <View style={styles.itemDetails}>
                                 <View style={styles.itemAvatar}>
-                                    {orderData.isFromCart ? 
-                                        <MaterialCommunityIcons name="cart" size={scale(20)} color={Colors.primary} /> : 
+                                    {orderData.isFromCart ?
+                                        <MaterialCommunityIcons name="cart" size={scale(20)} color={Colors.primary} /> :
                                         <Text style={styles.itemAvatarText}>{getInitials(orderData.child.name)}</Text>
                                     }
                                 </View>
@@ -141,7 +141,7 @@ const DeliveryAddress = ({ route, navigation }) => {
                         </View>
                         <View style={styles.priceBreakdown}>
                             <View style={styles.priceRow}><Text style={styles.priceLabel}>Subtotal</Text><Text style={styles.priceValue}>₹{subtotal.toFixed(2)}</Text></View>
-                            <View style={styles.priceRow}><Text style={styles.priceLabel}>Delivery</Text><Text style={styles.priceValue}>₹{deliveryFee.toFixed(2)}</Text></View>
+                            {/* Removed the Delivery Fee Row */}
                             <View style={[styles.priceRow, styles.totalRow]}><Text style={styles.totalLabel}>Total</Text><Text style={styles.totalValue}>₹{total.toFixed(2)}</Text></View>
                         </View>
                     </View>
@@ -212,4 +212,4 @@ const styles = StyleSheet.create({
     paymentButtonText: { color: Colors.textLight, fontSize: fontScale(16), fontWeight: 'bold' },
 });
 
-export default DeliveryAddress
+export default DeliveryAddress;

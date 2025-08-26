@@ -179,7 +179,7 @@ const YourChildrenScreen = ({ route, navigation }) => {
                             <MaterialCommunityIcons name="account-plus-outline" size={scale(20)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>Add Another Child</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.exploreItem} onPress={() => { /* Navigate to Add Address Screen */ }}>
+                        <TouchableOpacity onPressIn={()=> navigation.navigate(NavigationString.AddAddress)} style={styles.exploreItem} onPress={() => { /* Navigate to Add Address Screen */ }}>
                             <MaterialCommunityIcons name="map-marker-plus-outline" size={scale(20)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>Add Address</Text>
                         </TouchableOpacity>

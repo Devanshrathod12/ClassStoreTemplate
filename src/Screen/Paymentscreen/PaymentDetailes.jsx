@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'; // <-- FIX: Corrected this import line
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -34,9 +34,17 @@ const PaymentDetailes = ({ route, navigation }) => {
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('COD');
 
-  const subtotal = orderData ? (orderData.isFromCart ? parseFloat(orderData.cart.total_amount) : orderData.pkg.price) : 0;
-  const deliveryFee = 49;
-  const total = subtotal + deliveryFee;
+  const getSubtotal = () => {
+    if (!orderData) return 0;
+    if (orderData.isFromCart) {
+      return parseFloat(orderData.cart?.total_amount || 0);
+    } else {
+      return parseFloat(orderData.pkg?.price || 0);
+    }
+  };
+
+  const subtotal = getSubtotal();
+  const total = subtotal;
 
   useFocusEffect(
     useCallback(() => {
@@ -66,7 +74,6 @@ const PaymentDetailes = ({ route, navigation }) => {
               description: 'Please add a delivery address to continue.',
               type: 'warning',
             });
-            // Redirect to add an address, passing orderData to return here later
             navigation.navigate(NavigationString.DeliveryAddress, { orderData });
           }
         } catch (error) {
@@ -111,7 +118,6 @@ const PaymentDetailes = ({ route, navigation }) => {
             description: 'Please add a new address.',
             type: 'warning',
           });
-          // Redirect to add an address, passing orderData to return here later
           navigation.navigate(NavigationString.DeliveryAddress, { orderData });
         }
       }
@@ -129,8 +135,6 @@ const PaymentDetailes = ({ route, navigation }) => {
       return;
     }
     
-    // --- FIX: Removed the validation check for delivery notes ---
-    
     setIsLoading(true);
     try {
       const userPhoneNumber = await AsyncStorage.getItem('mobile_number');
@@ -146,7 +150,7 @@ const PaymentDetailes = ({ route, navigation }) => {
       const payload = {
         delivery_address: `${selectedSavedAddress.address_line1}, ${selectedSavedAddress.city}, ${selectedSavedAddress.state} - ${selectedSavedAddress.pincode}`,
         delivery_phone: userPhoneNumber,
-        delivery_notes: deliveryNotes.trim(), // Send notes if they exist, otherwise an empty string
+        delivery_notes: deliveryNotes.trim(),
         payment_method: paymentMethod,
       };
       const createdOrder = await apiPost('/api/v1/orders', payload);
@@ -175,6 +179,24 @@ const PaymentDetailes = ({ route, navigation }) => {
     return `${addr.address_line1}, ${addr.city}, ${addr.state} - ${addr.pincode}`;
   };
 
+  const getOrderDisplayInfo = () => {
+    if (!orderData) return { name: '', subtitle: '', quantity: 0 };
+    
+    if (orderData.isFromCart) {
+      return {
+        name: 'Items from Cart',
+        subtitle: `Total Items: ${orderData.cart?.quantity || 0}`,
+        quantity: orderData.cart?.quantity || 0
+      };
+    } else {
+      return {
+        name: orderData.pkg?.title || orderData.pkg?.bundle_name || 'Package',
+        subtitle: `For ${orderData.child?.name || ''} • Class ${orderData.child?.standard || ''}`,
+        quantity: 1
+      };
+    }
+  };
+
   if (isDataLoading || !orderData) {
     return (
       <View style={styles.loadingContainer}>
@@ -183,6 +205,8 @@ const PaymentDetailes = ({ route, navigation }) => {
       </View>
     );
   }
+
+  const orderDisplayInfo = getOrderDisplayInfo();
 
   return (
     <AdaptiveSafeAreaView>
@@ -215,29 +239,17 @@ const PaymentDetailes = ({ route, navigation }) => {
                     />
                   ) : (
                     <Text style={styles.itemAvatarText}>
-                      {getInitials(orderData.child.name)}
+                      {getInitials(orderData.child?.name || 'P')}
                     </Text>
                   )}
                 </View>
                 <View>
-                  {orderData.isFromCart ? (
-                    <>
-                      <Text style={styles.itemName}>Items from Cart</Text>
-                      <Text style={styles.itemFor}>
-                        Total Items: {orderData.cart.quantity}
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      <Text style={styles.itemName} numberOfLines={1}>
-                        {orderData.pkg.title}
-                      </Text>
-                      <Text style={styles.itemFor}>
-                        For {orderData.child.name} • Class{' '}
-                        {orderData.child.standard}
-                      </Text>
-                    </>
-                  )}
+                  <Text style={styles.itemName} numberOfLines={1}>
+                    {orderDisplayInfo.name}
+                  </Text>
+                  <Text style={styles.itemFor}>
+                    {orderDisplayInfo.subtitle}
+                  </Text>
                 </View>
               </View>
               <Text style={styles.itemPrice}>₹{subtotal.toFixed(2)}</Text>
@@ -282,7 +294,7 @@ const PaymentDetailes = ({ route, navigation }) => {
             ))}
             <TextInput
               style={styles.notesInput}
-              placeholder="Delivery Notes (Optional)" // <-- FIX: Updated placeholder text
+              placeholder="Delivery Notes (Optional)"
               value={deliveryNotes}
               onChangeText={setDeliveryNotes}
             />
