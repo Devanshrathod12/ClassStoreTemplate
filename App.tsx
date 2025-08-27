@@ -1,19 +1,30 @@
-
 import 'react-native-gesture-handler';
-import { StyleSheet, View, ActivityIndicator } from 'react-native';
 import React from 'react';
+import { StyleSheet, View, ActivityIndicator } from 'react-native';
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
 import { store, persistor } from './src/Redux/store';
 import Route from "./src/Navigation/Route";
 import FlashMessage from "react-native-flash-message";
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'; // Import useSafeAreaInsets
 
+const RootApp = () => {
+  const insets = useSafeAreaInsets(); 
 
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+  return (
+    <>
+      <Route />
+      <FlashMessage
+        position="top"
+        floating={true}
+        statusBarHeight={insets.top}
+      />
+    </>
+  );
+};
 
 const App = () => {
   return (
-   
     <SafeAreaProvider>
       <Provider store={store}>
         <PersistGate
@@ -24,11 +35,8 @@ const App = () => {
           }
           persistor={persistor}
         >
-          <Route />
-          <FlashMessage 
-            position="top"
-            floating={true} 
-          />
+         
+          <RootApp /> 
         </PersistGate>
       </Provider>
     </SafeAreaProvider>
