@@ -11,6 +11,8 @@ import {
   ScrollView,
   ActivityIndicator,
   TouchableWithoutFeedback,
+  Image,
+  Keyboard // Added Keyboard import
 } from 'react-native';
 import { showMessage } from 'react-native-flash-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -23,6 +25,10 @@ import {
 } from '../../styles/stylesconfig';
 import { apiPost } from '../../api/api';
 import AdaptiveSafeAreaView from '../AdaptiveSafeAreaView';
+
+// Assuming smritikaa.png is in the assets folder
+// Adjust the path if your assets folder is structured differently
+const SmritikaaLogo = require('../../assets/smritikaa.png'); 
 
 const CustomOtpInput = ({ numberOfInputs = 6, onCodeFilled, onCodeChange }) => {
   const [code, setCode] = useState(Array(numberOfInputs).fill(''));
@@ -257,8 +263,9 @@ const WelcomeScreen = ({ onLoginSuccess }) => {
   return (
     <AdaptiveSafeAreaView>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         style={styles.container}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : -100}
       >
         <StatusBar
           barStyle="dark-content"
@@ -268,6 +275,9 @@ const WelcomeScreen = ({ onLoginSuccess }) => {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Smritikaa Logo Added Here, above the formContainer */}
+          <Image source={SmritikaaLogo} style={styles.logo} resizeMode="contain" />
+
           <View style={styles.formContainer}>
             <Text style={styles.formTitle}> Login / Signup</Text>
             <Text style={styles.formSubtitle}>
@@ -372,8 +382,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.backgroundLight },
   content: {
     flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    
+    alignItems: 'center', // Keep content horizontally centered
     paddingHorizontal: scale(20),
     paddingVertical: verticalScale(20),
   },
@@ -383,12 +393,18 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(12),
     padding: moderateScale(20),
     alignItems: 'center',
-    marginTop: verticalScale(30),
+    marginTop: verticalScale(5), // Adjusted spacing from logo
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+  },
+  logo: { // Style for the logo
+    width: scale(250), // Your requested width
+    height: verticalScale(250), // Your requested height
+    marginBottom: verticalScale(20), // Space below the logo
+    marginTop: verticalScale(20), // Adjusted margin from the top of the screen/safe area
   },
   formTitle: {
     fontSize: fontScale(22),
