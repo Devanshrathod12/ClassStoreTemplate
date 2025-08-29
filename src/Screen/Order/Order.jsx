@@ -1,3 +1,5 @@
+// ye final hai abhi to 
+
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -5,13 +7,14 @@ import { showMessage } from 'react-native-flash-message';
 import Colors from '../../styles/colors';
 import { scale, fontScale, verticalScale, moderateScale } from '../../styles/stylesconfig';
 import NavigationString from '../../Navigation/NavigationString';
-import { apiPost } from '../../api/api';
+import { apiPost, apiDelete } from '../../api/api'; // Import apiDelete
 import AdaptiveSafeAreaView from '../AdaptiveSafeAreaView';
 
 const Order = ({ route, navigation }) => {
     const { orderData, address, total, paymentMethod, orderDetails, deliveryPhoneNumber } = route.params || {};
     const [status, setStatus] = useState('confirming');
 
+    
     const handleConfirmOrder = async () => {
         if (!orderDetails?.order_id) {
             showMessage({ message: "Error", description: "Order ID is missing.", type: "danger" });
@@ -20,6 +23,20 @@ const Order = ({ route, navigation }) => {
         setStatus('loading');
         try {
             await apiPost(`/api/v1/orders/${orderDetails.order_id}/confirm`, {});
+            
+            // Delete cart items ONLY if the order was confirmed AND originated from the cart
+            if (orderData.isFromCart && orderData.cart && orderData.cart.items && orderData.cart.items.length > 0) {
+                try {
+                    await Promise.all(orderData.cart.items.map(async (item) => {
+                        await apiDelete(`/api/v1/cart/items/${item.cart_item_id}`);
+                    }));
+                    console.log("Cart items successfully cleared after order confirmation.");
+                } catch (cartClearError) {
+                    console.error("Failed to clear cart items after order confirmation:", cartClearError);
+                    // Decide if you want to show a message or just log on cart clear failure
+                }
+            }
+
             setStatus('confirmed');
             showMessage({ message: "Order Confirmed!", type: "success" });
         } catch (error) {
@@ -29,22 +46,10 @@ const Order = ({ route, navigation }) => {
         }
     };
 
-    const handleCancelOrder = async () => {
-        if (!orderDetails?.order_id) {
-            showMessage({ message: "Error", description: "Order ID is missing.", type: "danger" });
-            return;
-        }
-        setStatus('loading');
-        try {
-            await apiPost(`/api/v1/orders/${orderDetails.order_id}/cancel`, {});
-            showMessage({ message: "Order has been cancelled", type: "info" });
-            navigation.popToTop();
-            navigation.navigate(NavigationString.YourChildrenScreen);
-        } catch (error) {
-            console.error("Failed to cancel order:", error.response?.data || error);
-            showMessage({ message: "Cancellation Failed", description: "Please try again.", type: "danger" });
-            setStatus('confirming');
-        }
+    const handleCancelOrder = () => {
+        // Instead of calling a cancel API, just navigate back to the PaymentDetailes screen
+        showMessage({ message: "Order not confirmed", description: "You can modify details or place a new order.", type: "info" });
+        navigation.goBack(); // Navigate back to PaymentDetailes
     };
 
     const handleContinueShopping = () => {

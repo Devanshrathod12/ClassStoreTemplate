@@ -21,6 +21,7 @@ import AdaptiveSafeAreaView from '../AdaptiveSafeAreaView';
 import NavigationString from '../../Navigation/NavigationString';
 
 
+
 const MyCartScreen = ({ navigation }) => {
     const [cartItems, setCartItems] = useState([]);
     const [cartDetails, setCartDetails] = useState(null);
