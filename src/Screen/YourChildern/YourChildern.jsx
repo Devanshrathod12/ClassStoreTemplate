@@ -60,34 +60,53 @@ const YourChildrenScreen = ({ route, navigation }) => {
     const [children, setChildren] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
+    const fetchSchoolData = async (schoolId) => {
+        try {
+            const response = await apiGet(`/api/v1/school/${schoolId}`);
+            return response.school_name || 'N/A';
+        } catch (error) {
+            console.error(`Error fetching school data for ID ${schoolId}:`, error);
+            return 'N/A';
+        }
+    };
+
+    const fetchClassData = async (classId) => {
+        try {
+            const response = await apiGet(`/api/v1/class/${classId}`);
+            return response.class_number || 'N/A';
+        } catch (error) {
+            console.error(`Error fetching class data for ID ${classId}:`, error);
+            return 'N/A';
+        }
+    };
+
     useFocusEffect(
         useCallback(() => {
             const fetchData = async () => {
-                // Do not set loading to true if it's just a refresh, to avoid flicker
                 if (children.length === 0) {
                     setIsLoading(true);
                 }
                 try {
                     const userId = await AsyncStorage.getItem('userId');
                     if (userId) {
-                        const storageKey = `children_extra_data_${userId}`;
-                        const extraDataString = await AsyncStorage.getItem(storageKey);
-                        const extraData = extraDataString ? JSON.parse(extraDataString) : {};
-
                         const response = await apiGet(`/api/v1/children/user/${userId}`);
                         if (response && Array.isArray(response)) {
-                            const enrichedChildren = response.map(apiChild => {
-                                // FIX: Use the permanent child ID as the key to get extra data
-                                const persistentData = extraData[apiChild.id] || {};
-                                return {
-                                    ...apiChild,
-                                    classId: apiChild.class_id,
-                                    schoolId: apiChild.school_id,
-                                    school_name: persistentData.school_name || 'N/A',
-                                    class_name: persistentData.class_name || 'N/A',
-                                    standard: persistentData.class_name || 'N/A',
-                                };
-                            });
+                            // Fetch school and class data for each child
+                            const enrichedChildren = await Promise.all(
+                                response.map(async (apiChild) => {
+                                    const schoolName = await fetchSchoolData(apiChild.school_id);
+                                    const className = await fetchClassData(apiChild.class_id);
+                                    
+                                    return {
+                                        ...apiChild,
+                                        classId: apiChild.class_id,
+                                        schoolId: apiChild.school_id,
+                                        school_name: schoolName,
+                                        class_name: className,
+                                        standard: className, // For compatibility with SelectPackageScreen
+                                    };
+                                })
+                            );
                             setChildren(enrichedChildren);
                         } else {
                             setChildren([]);
@@ -105,7 +124,6 @@ const YourChildrenScreen = ({ route, navigation }) => {
                 }
             };
             fetchData();
-        // The empty dependency array [] makes this effect run every time the screen is focused
         }, [])
     );
 

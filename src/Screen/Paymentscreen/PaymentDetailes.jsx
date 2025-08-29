@@ -74,7 +74,6 @@ const PaymentDetailes = ({ route, navigation }) => {
               description: 'Please add a delivery address to continue.',
               type: 'warning',
             });
-            // Replace navigation to DeliveryAddress without passing data
             navigation.replace(NavigationString.DeliveryAddress);
           }
         } catch (error) {
@@ -95,7 +94,7 @@ const PaymentDetailes = ({ route, navigation }) => {
       } else {
         setIsDataLoading(false);
       }
-    }, [orderData, selectedSavedAddress, navigation]) // Added navigation to dependency array
+    }, [orderData, selectedSavedAddress, navigation])
   );
 
   const getInitials = name => {
@@ -120,7 +119,6 @@ const PaymentDetailes = ({ route, navigation }) => {
             description: 'Please add a new address.',
             type: 'warning',
           });
-          // Replace navigation to DeliveryAddress without passing data
           navigation.replace(NavigationString.DeliveryAddress);
         }
       }
@@ -151,14 +149,64 @@ const PaymentDetailes = ({ route, navigation }) => {
         return;
       }
 
-      const payload = {
-        delivery_address: `${selectedSavedAddress.address_line1}, ${selectedSavedAddress.city}, ${selectedSavedAddress.state} - ${selectedSavedAddress.pincode}`,
-        delivery_phone: userPhoneNumber,
-        delivery_notes: deliveryNotes.trim(),
-        payment_method: paymentMethod,
-      };
+      let createdOrder;
+      
+      if (orderData.isFromCart) {
+        // Order from cart - use the regular order endpoint
+        const payload = {
+          delivery_address: `${selectedSavedAddress.address_line1}, ${selectedSavedAddress.city}, ${selectedSavedAddress.state} - ${selectedSavedAddress.pincode}`,
+          delivery_phone: userPhoneNumber,
+          delivery_notes: deliveryNotes.trim(),
+          payment_method: paymentMethod,
+        };
+        
+        createdOrder = await apiPost('/api/v1/orders', payload);
+      } else {
+        // Direct package order - use a direct order endpoint
+        const payload = {
+          bundle_id: orderData.pkg.id || orderData.pkg.bundle_id,
+          delivery_address: `${selectedSavedAddress.address_line1}, ${selectedSavedAddress.city}, ${selectedSavedAddress.state} - ${selectedSavedAddress.pincode}`,
+          delivery_phone: userPhoneNumber,
+          delivery_notes: deliveryNotes.trim(),
+          payment_method: paymentMethod,
+        };
+        
+        // Try direct order endpoint first
+        try {
+          createdOrder = await apiPost('/api/v1/orders/direct', payload);
+        } catch (directError) {
+          console.log('Direct order endpoint failed, trying fallback method:', directError);
+          
+          // If direct endpoint doesn't exist, add to cart first then order
+          const cartResponse = await apiGet('/api/v1/cart');
+          let cartId;
+          
+          if (cartResponse && cartResponse.cart_id) {
+            cartId = cartResponse.cart_id;
+          } else {
+            const newCart = await apiPost('/api/v1/cart');
+            cartId = newCart.cart_id;
+          }
+          
+          // Add the bundle to the cart
+          const cartPayload = { 
+            bundle_id: orderData.pkg.id || orderData.pkg.bundle_id, 
+            quantity: 1 
+          };
+          await apiPost(`/api/v1/cart/${cartId}/items`, cartPayload);
+          
+          // Now create the order from cart
+          const orderPayload = {
+            delivery_address: `${selectedSavedAddress.address_line1}, ${selectedSavedAddress.city}, ${selectedSavedAddress.state} - ${selectedSavedAddress.pincode}`,
+            delivery_phone: userPhoneNumber,
+            delivery_notes: deliveryNotes.trim(),
+            payment_method: paymentMethod,
+          };
+          
+          createdOrder = await apiPost('/api/v1/orders', orderPayload);
+        }
+      }
 
-      const createdOrder = await apiPost('/api/v1/orders', payload);
       showMessage({ message: 'Order Placed Successfully!', type: 'success' });
 
       navigation.navigate(NavigationString.Order, {
@@ -171,9 +219,19 @@ const PaymentDetailes = ({ route, navigation }) => {
       });
     } catch (error) {
       console.error('Failed to place order:', error.response?.data || error);
+      
+      let errorMessage = 'Please try again.';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      } else if (error.response?.status === 405) {
+        errorMessage = 'Server method not allowed. Please contact support.';
+      }
+      
       showMessage({
         message: 'Order Failed',
-        description: 'Please try again.',
+        description: errorMessage,
         type: 'danger',
       });
     } finally {
