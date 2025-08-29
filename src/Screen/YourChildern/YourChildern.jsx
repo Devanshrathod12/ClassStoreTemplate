@@ -149,7 +149,7 @@ const YourChildrenScreen = ({ route, navigation }) => {
             <ScrollView contentContainerStyle={styles.content}>
                 <View style={styles.headerContainer}>
                     <View style={{ width: scale(24) }} />
-                    <Text style={styles.appName}>ClassStore</Text>
+                    <Text style={styles.appName}>Smritikaa</Text>
                     <TouchableOpacity 
                         onPress={() => navigation.navigate("MyCart")}
                     >
@@ -174,7 +174,7 @@ const YourChildrenScreen = ({ route, navigation }) => {
                 </View>
                 <View style={styles.section}>
                     <View style={styles.exploreCard}>
-                        <Text style={styles.exploreTitle}>Explore ClassStore</Text>
+                        <Text style={styles.exploreTitle}>Explore Smritikaa</Text>
                         <TouchableOpacity style={styles.exploreItem} onPress={() => navigation.navigate(NavigationString.AddChild)}>
                             <MaterialCommunityIcons name="account-plus-outline" size={scale(20)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>Add Another Child</Text>
@@ -195,7 +195,7 @@ const YourChildrenScreen = ({ route, navigation }) => {
                         />
                             <Text style={styles.exploreItemText}>My Orders</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={[styles.exploreItem, {borderBottomWidth: 0}]}>
+                        <TouchableOpacity onPress={()=> navigation.navigate("AccountSetting")} style={[styles.exploreItem, {borderBottomWidth: 0}]}>
                             <MaterialCommunityIcons name="cog-outline" size={scale(20)} color={Colors.textSecondary} />
                             <Text style={styles.exploreItemText}>Account Settings</Text>
                         </TouchableOpacity>

@@ -43,6 +43,10 @@ const MyOrders = ({ navigation }) => {
     }, []),
   );
 
+  const handleGoBack = () => {
+    navigation.goBack();
+  };
+
   const getStatusStyle = status => {
     switch (status) {
       case 'CONFIRMED':
@@ -106,6 +110,9 @@ const MyOrders = ({ navigation }) => {
           backgroundColor={Colors.backgroundLight}
         />
         <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
+            <MaterialCommunityIcons name="arrow-left" size={scale(24)} color={Colors.textPrimary} />
+          </TouchableOpacity>
           <Text style={styles.headerTitle}>My Orders</Text>
         </View>
         {isLoading ? (
@@ -141,6 +148,9 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.backgroundLight },
   container: { flex: 1 },
   header: {
+    flexDirection: 'row', // Added to align back button and title
+    alignItems: 'center', // Align items vertically
+    justifyContent: 'center', // Center title, but back button will take up space
     padding: moderateScale(16),
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderLight,
@@ -150,7 +160,10 @@ const styles = StyleSheet.create({
     fontSize: fontScale(18),
     fontWeight: 'bold',
     color: Colors.textPrimary,
-    textAlign: 'center',
+    // textAlign: 'center', // Removed as flexDirection 'row' will handle centering
+    flex: 1, // Allows title to take up remaining space
+    textAlign: 'center', // Re-add for text centering within its flex container
+    marginLeft: -scale(24), // Offset for the back button's width to truly center title
   },
   centeredView: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   listContainer: { padding: scale(16) },
@@ -212,4 +225,11 @@ const styles = StyleSheet.create({
     fontSize: fontScale(14),
     color: Colors.textMuted,
   },
+  // New style for the back button
+  backButton: {
+    position: 'absolute',
+    left: scale(16),
+    zIndex: 1, // Ensure it's above other elements if needed
+    padding: scale(5)
+  }
 });

@@ -73,6 +73,12 @@ export default function (Stack, isTokenValid, onLoginSuccess,onLogout) {
         component={Screen.AddAddress}
         options={{ headerShown: false }}
       />
+     <Stack.Screen
+  name={NavigationString.AccountSetting}
+  options={{ headerShown: false }}
+>
+  {(props) => <Screen.AccountSetting {...props} onLogout={onLogout} />}
+</Stack.Screen>
     </>
   );
 }

@@ -387,32 +387,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(20),
     paddingVertical: verticalScale(20),
   },
-  formContainer: {
-    width: '100%',
-    backgroundColor: Colors.WhiteBackgroudcolor,
-    borderRadius: moderateScale(12),
-    padding: moderateScale(20),
-    alignItems: 'center',
-    marginTop: verticalScale(5), // Adjusted spacing from logo
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  logo: { // Style for the logo
-    width: scale(250), // Your requested width
-    height: verticalScale(250), // Your requested height
-    marginBottom: verticalScale(20), // Space below the logo
-    marginTop: verticalScale(20), // Adjusted margin from the top of the screen/safe area
-  },
+  logo: {
+  width: scale(300),
+  height: verticalScale(250),
+  // borderWidth: 1,
+  alignSelf: 'center',
+  zIndex: 1,            // image ko neeche rakhne ke liye
+},
+
+formContainer: {
+  width: '100%',
+  backgroundColor: Colors.WhiteBackgroudcolor,
+  borderRadius: moderateScale(12),
+  padding: moderateScale(20),
+  alignItems: 'center',
+  marginTop: verticalScale(-50),   // card ko upar kheench lega
+  elevation: 3,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.1,
+  shadowRadius: 4,
+  position: 'relative',
+  zIndex: 2,          // form ko image ke upar rakhna
+},
+
   formTitle: {
-    fontSize: fontScale(22),
+    fontSize: fontScale(18),
     fontWeight: 'bold',
     color: Colors.textDark,
   },
   formSubtitle: {
-    fontSize: fontScale(14),
+    fontSize: fontScale(12),
     color: Colors.textMuted,
     marginTop: verticalScale(5),
     textAlign: 'center',
